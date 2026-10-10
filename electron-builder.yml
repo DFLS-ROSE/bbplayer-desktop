@@ -1,0 +1,50 @@
+appId: com.bbplayer.desktop
+productName: BBPlayer
+copyright: Copyright © BBPlayer
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - resources/**
+  - package.json
+asarUnpack:
+  - resources/**
+
+# 自动更新源：GitHub Releases（占位 org/repo，后续可换 OSS/CDN provider）
+publish:
+  provider: github
+  owner: bbplayer-app
+  repo: bbplayer-desktop
+
+# 打包（mac 签名）后执行公证脚本；证书就绪后生效
+afterSign: scripts/notarize.js
+
+win:
+  target:
+    - nsis
+  icon: resources/icon.ico
+  # 代码签名占位：证书就绪后通过环境变量注入（CSC_LINK / CSC_KEY_PASSWORD）
+  # certificateFile: ${env.WIN_CERT_FILE}
+  # certificatePassword: ${env.WIN_CERT_PASSWORD}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  # 卸载时删除应用数据目录（%APPDATA%\BBPlayer：settings.json / bbplayer.db / 日志）
+  deleteAppDataOnUninstall: true
+
+mac:
+  target:
+    - dmg
+    - zip # 差分更新需要 zip target
+  icon: resources/icon.png
+  category: public.app-category.music
+  hardenedRuntime: true
+
+linux:
+  target:
+    - AppImage
+  icon: resources/icon.png
+  category: Audio

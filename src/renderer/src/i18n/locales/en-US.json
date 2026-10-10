@@ -1,0 +1,30 @@
+{
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "languageHint": "Takes effect immediately",
+    "privacy": "Privacy & Compliance",
+    "privacyLink": "View Privacy Policy & Disclaimer"
+  },
+  "privacy": {
+    "title": "Privacy Policy & Disclaimer",
+    "privacyTitle": "Privacy Policy",
+    "disclaimerTitle": "Disclaimer",
+    "privacyContent": "BBPlayer is a locally-running Bilibili audio player. We only store the data required to run locally (playlists, play history, settings, login cookies). We do not upload your personal information to any third-party server. Login cookies are encrypted with the system secure storage and kept on this device, and are only used to fetch data you authorize from the official Bilibili APIs.",
+    "disclaimerContent": "This application is for personal study and research only. The third-party playlist import feature accesses public endpoints of external platforms and automatically matches existing Bilibili videos; all copyright belongs to the original authors. Do not use imported content for any commercial purpose. Any copyright or compliance risks arising from the use of this application are borne by the user.",
+    "legalNote": "(This copy is a technical draft and requires final legal review.)",
+    "back": "Back to settings"
+  },
+  "auth": {
+    "expired": "Login expired, please sign in again"
+  },
+  "import": {
+    "disclaimer": "Disclaimer: For personal study and research only. Importing will automatically match existing Bilibili videos and skip invalid items. Do not use for commercial purposes.",
+    "confirmLabel": "I have read and agree to the disclaimer above"
+  },
+  "errors": {
+    "network": {
+      "timeout": "Network request timed out, please try again later"
+    }
+  }
+}

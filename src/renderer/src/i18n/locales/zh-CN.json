@@ -1,0 +1,30 @@
+{
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "languageHint": "切换后立即生效",
+    "privacy": "隐私与合规",
+    "privacyLink": "查看隐私政策与免责声明"
+  },
+  "privacy": {
+    "title": "隐私政策与免责声明",
+    "privacyTitle": "隐私政策",
+    "disclaimerTitle": "免责声明",
+    "privacyContent": "BBPlayer 是一个本地运行的 B 站音频播放器。我们仅在本地存储运行所需数据（歌单、播放历史、设置、登录 Cookie），不向任何第三方服务器上传你的个人信息。登录 Cookie 经系统安全存储加密后保存在本机，仅用于向 Bilibili 官方接口获取你授权的数据。",
+    "disclaimerContent": "本应用仅供个人学习与研究使用。第三方歌单导入功能会访问外部平台公开接口并自动匹配 Bilibili 已有视频，其版权归原作者所有；请勿将导入内容用于任何商业用途，因使用本应用产生的版权或合规风险由使用者自行承担。",
+    "legalNote": "（本文案为技术初稿，需法务终稿确认）",
+    "back": "返回设置"
+  },
+  "auth": {
+    "expired": "登录已过期，请重新登录"
+  },
+  "import": {
+    "disclaimer": "免责声明：仅用于个人学习研究，导入时将自动匹配已有 B 站视频并跳过失效项，请勿用于商业用途。",
+    "confirmLabel": "我已阅读并同意上述免责声明"
+  },
+  "errors": {
+    "network": {
+      "timeout": "网络请求超时，请稍后重试"
+    }
+  }
+}

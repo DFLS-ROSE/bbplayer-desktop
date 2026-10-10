@@ -1,0 +1,185 @@
+classDiagram
+    direction LR
+
+    class Shadow {
+        +String id
+        +String name
+        +String suffix
+        +Long createdAt
+    }
+    class Bookmark {
+        +String id
+        +String title
+        +String url
+        +String faviconUrl
+        +Long createdAt
+    }
+    class QuickLink {
+        +String id
+        +String title
+        +String url
+        +String faviconUrl
+        +Int slotIndex
+    }
+    class SiteScale {
+        +String host
+        +Float scale
+    }
+    class SpeedLevel {
+        +String id
+        +String label
+        +Float multiplier
+        +Boolean isCustom
+    }
+    class AppSettings {
+        +Boolean darkTheme
+        +String audioPolicy
+        +Float defaultScale
+        +Int cacheWarnMb
+        +Int cacheAutoClearMb
+        +Boolean statusChipEnabled
+        +List~Float~ customSpeeds
+    }
+
+    class WebViewFactory {
+        +WebView create(shadow: Shadow): WebView
+        +configure(webView: WebView)
+        +destroy(webView: WebView)
+    }
+    class ShadowDataDirectory {
+        +suffixFor(shadow: Shadow): String
+        +isIsolationSupported(): Boolean
+        +snapshotCookies(tabId): String
+        +restoreCookies(tabId, snapshot)
+    }
+    class YeyouWebViewClient {
+        +onPageStarted()
+        +onPageFinished()
+        +shouldInterceptRequest(): WebResourceResponse?
+        +onRenderProcessGone(): Boolean
+    }
+    class YeyouWebChromeClient {
+        +onShowCustomView()
+        +onHideCustomView()
+        +onPermissionRequest()
+    }
+    class AssetServer {
+        +buildLoader(): WebViewAssetLoader
+        +resolve(url: String): String
+    }
+    class RuffleManager {
+        +buildBootstrapScript(): String
+        +isSwfUrl(url: String): Boolean
+        +shellUrlFor(swf: String): String
+        +setSpeed(playerJsName, speed)
+    }
+    class SpeedController {
+        +currentSpeed(tabId): Float
+        +setSpeed(tabId, speed): Job
+        +buildJsHookScript(): String
+        +reAnchor(tabId, speed)
+    }
+    class ScriptInjector {
+        +injectDocumentStart(webView, script)
+        +eval(webView, js, callback)
+    }
+
+    class TabManager {
+        +createTab(shadowId): TabId
+        +closeTab(tabId)
+        +switchTab(tabId)
+        +activeTab(): Tab
+        +tabs(): List~Tab~
+    }
+    class SessionManager {
+        +save(session)
+        +restore(): Session?
+    }
+    class ShadowManager {
+        +createShadow(name): Shadow
+        +renameShadow(id, name)
+        +deleteShadow(id)
+        +cloneToShadow(tabId): Shadow
+        +list(): List~Shadow~
+    }
+    class DownloadManager {
+        +download(url, mime, filename)
+        +uniqueName(filename): String
+    }
+    class CacheManager {
+        +cacheSizeMb(): Long
+        +clearCache()
+        +checkAutoClean()
+    }
+    class AudioPolicyManager {
+        +requestFocus()
+        +releaseFocus()
+        +onBackground(policy)
+    }
+    class UpdateChecker {
+        +check(stableOnly: Boolean): ReleaseInfo?
+    }
+
+    class ShadowRepository {
+        +list(): Flow~List~Shadow~~
+        +upsert(shadow)
+        +delete(id)
+    }
+    class BookmarkRepository {
+        +list(): Flow~List~Bookmark~~
+        +add(bookmark)
+        +remove(id)
+    }
+    class QuickLinkRepository {
+        +list(): Flow~List~QuickLink~~
+        +setSlot(index, link)
+        +removeSlot(index)
+    }
+    class SiteScaleRepository {
+        +get(host): Float?
+        +set(host, scale)
+    }
+    class SettingsRepository {
+        +settings(): Flow~AppSettings~
+        +update(transform)
+    }
+
+    class MainViewModel {
+        +tabs: StateFlow~List~Tab~~
+        +activeTab: StateFlow~TabId~
+        +shadows: StateFlow~List~Shadow~~
+        +speed: StateFlow~Float~
+    }
+    class BrowserViewModel {
+        +url: StateFlow~String~
+        +canGoBack/Forward
+        +navigate(input)
+        +setSpeed(speed)
+    }
+    class HomeViewModel
+    class SettingsViewModel
+    class BookmarksViewModel
+
+    WebViewFactory --> ShadowDataDirectory : 使用
+    YeyouWebViewClient --> AssetServer : 拦截资源
+    YeyouWebViewClient --> RuffleManager : 注入引导
+    SpeedController --> RuffleManager : 路由 setSpeed
+    SpeedController --> ScriptInjector : 注入/求值
+    ShadowManager --> WebViewFactory : 建隔离实例
+    ShadowManager --> ShadowRepository : 持久化
+    ShadowManager --> TabManager : 克隆标签
+    TabManager --> WebViewFactory : 建 WebView
+    SessionManager --> TabManager : 恢复会话
+    TabManager --> SpeedController : 每标签倍率
+    MainViewModel --> TabManager
+    MainViewModel --> ShadowManager
+    MainViewModel --> SpeedController
+    BrowserViewModel --> SpeedController
+    BrowserViewModel --> DownloadManager
+    SettingsViewModel --> SettingsRepository
+    BookmarksViewModel --> BookmarkRepository
+    ShadowRepository --> Shadow
+    BookmarkRepository --> Bookmark
+    QuickLinkRepository --> QuickLink
+    SiteScaleRepository --> SiteScale
+    SettingsRepository --> AppSettings

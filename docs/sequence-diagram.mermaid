@@ -1,0 +1,75 @@
+%% ============ 5.1 冷启动 → 恢复会话 → 打开游戏 → 注入 Ruffle + 变速钩子 → SWF 运行 ============
+sequenceDiagram
+    participant U as 用户
+    participant MV as MainViewModel
+    participant SM as SessionManager
+    participant WF as WebViewFactory
+    participant WV as WebView
+    participant SI as ScriptInjector
+    participant RM as RuffleManager
+    participant SC as SpeedController
+
+    U->>MV: 启动 App
+    MV->>SM: restore()
+    SM-->>MV: 上次会话(标签列表)
+    MV->>WF: create(shadow=默认)
+    WF->>WV: 配置(UA/硬件加速/缩放)
+    MV->>SI: injectDocumentStart(yeyou_runtime.js)
+    Note over WV,SI: WebViewCompat.addDocumentStartJavaScript<br/>document_start 时机注入
+    U->>MV: 输入游戏地址/搜索
+    MV->>WV: loadUrl(游戏页)
+    WV->>SI: onPageStarted → 已注入脚本生效
+    Note over RM: yeyou_runtime.js 经 WebViewAssetLoader<br/>动态加载 ruffle.js（离线）
+    WV->>RM: 页面含 <embed>/<object> SWF
+    RM->>WV: Ruffle polyfill 接管 → 创建 Ruffle player
+    Note over WV: 直连 .swf 则跳转 swf_shell.html 创建 player
+    WV-->>U: Flash 游戏运行(默认 1x)
+    U->>SC: 切换 2x
+    SC->>WV: evaluateJavascript("window.__yeyouSpeed.set(2.0)")
+    WV->>RM: rufflePlayer.setSpeed(2.0)
+    RM->>WV: wasm set_speed(2.0) → 重锚定
+    Note over WV: getTimer/Timer/EnterFrame 按 2x 推进
+
+%% ============ 5.2 变速切换（重锚定防跳变） ============
+sequenceDiagram
+    participant U as 用户
+    participant BV as BrowserViewModel
+    participant SC as SpeedController
+    participant WV as WebView
+    participant JS as yeyou_runtime.js
+    participant RW as 定制 Ruffle WASM
+
+    U->>BV: 点速度档(1x→3x)
+    BV->>SC: setSpeed(tabId, 3.0)
+    SC->>WV: evaluateJavascript("__yeyouSpeed.set(3.0)")
+    WV->>JS: 执行注入脚本
+    JS->>JS: 重锚定(base_real=now, base_virtual=当前虚拟时刻)
+    JS->>RW: rufflePlayer.setSpeed(3.0)
+    RW->>RW: re_anchor(now, 3.0)
+    Note over RW,JS: 两条时间轴均连续、无跳变<br/>响应 ≤300ms
+    SC-->>BV: 更新 StateFlow(3.0) → UI 高亮
+
+%% ============ 5.3 添加影子（克隆 → 隔离实例 → 同屏双开） ============
+sequenceDiagram
+    participant U as 用户
+    participant ShM as ShadowManager
+    participant ShR as ShadowRepository
+    participant SD as ShadowDataDirectory
+    participant WF as WebViewFactory
+    participant TM as TabManager
+
+    U->>ShM: 「克隆当前页到新影子」
+    ShM->>ShR: upsert(新 Shadow {suffix=shadow_<id>})
+    ShR-->>ShM: 保存成功
+    ShM->>SD: suffixFor(shadow)
+    alt API >= 28
+        SD->>WF: setDataDirectorySuffix(suffix)
+        Note over WF: 新实例独立 Cookie/localStorage/缓存
+    else API 24~27 降级
+        SD->>SD: snapshotCookies(原实例)
+        Note over SD: 克隆时冷拷贝 Cookie 快照 + UI 提示隔离受限
+    end
+    ShM->>TM: createTab(shadowId)
+    TM->>WF: create(shadow)
+    TM-->>U: 新标签(独立实例) 同屏双开
+    Note over ShM: 单实例崩溃由 onRenderProcessGone 局部重建<br/>不影响其他实例

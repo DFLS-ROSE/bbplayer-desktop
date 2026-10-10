@@ -1,0 +1,53 @@
+sequenceDiagram
+    autonumber
+    participant APP as app.whenReady
+    participant AUTH as AuthService
+    participant API as BiliApi
+    participant HTTP as HttpClient
+    participant WM as WindowManager
+    participant R as Renderer(App.tsx)
+
+    Note over APP,R: 启动校验 + 定期探活（H-04）
+    APP->>AUTH: verifySession()
+    alt 存在 Cookie
+        AUTH->>API: getNav()
+        API->>HTTP: GET /x/web-interface/nav
+        HTTP-->>API: { isLogin, mid }
+        alt isLogin=false 或抛错
+            AUTH->>AUTH: clearSessionCookie() + setUserInfo(null)
+            AUTH->>WM: sendToMain('bili:authChanged', state)
+            WM->>R: onAuthChanged(state)
+            R->>R: invalidateQueries(['auth']) + toast 重登提示
+        end
+    end
+    loop 每 5min
+        AUTH->>AUTH: verifySession()
+    end
+    Note over AUTH,HTTP: 请求返回 -101 主动失效
+    HTTP->>HTTP: requestData 捕获 BiliError(-101)
+    HTTP->>AUTH: onAuthFailure()
+    AUTH->>AUTH: 清 Cookie + userInfo + emit()
+
+sequenceDiagram
+    autonumber
+    participant MAIN as main/index.ts
+    participant LOG as Logger
+    participant WM as WindowManager
+    participant R as Renderer
+
+    Note over MAIN,R: 全局异常兜底（H-06/H-07/H-08）
+    MAIN->>MAIN: process.on('uncaughtException')
+    MAIN->>LOG: error('main', stack, {traceId})
+    MAIN->>MAIN: process.on('unhandledRejection')
+    MAIN->>LOG: error('main', reason, {traceId})
+    MAIN->>MAIN: app.on('render-process-gone')
+    alt 首次崩溃（防抖内）
+        MAIN->>LOG: error('main', 'render-process-gone', {reason})
+        MAIN->>WM: webContents.reload() 自动恢复一次
+    else 30s 内 ≥3 次
+        MAIN->>R: 弹窗提示
+    end
+    Note over R: 渲染层错误
+    R->>R: ErrorBoundary.componentDidCatch
+    R->>MAIN: window.api.log({level:'error', scope:'renderer', ...})
+    MAIN->>LOG: error('renderer', message, {stack, traceId})

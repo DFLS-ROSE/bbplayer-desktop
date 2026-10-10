@@ -1,0 +1,84 @@
+classDiagram
+    class Logger {
+        +info(scope, message, meta) void
+        +warn(scope, message, meta) void
+        +error(scope, message, meta) void
+        +debug(scope, message, meta) void
+        +createTraceId() string
+    }
+    class SecurityHardening {
+        +installSecurityHardening() void
+        +hardenWindow(win) void
+        +isSafeExternalUrl(url) boolean
+    }
+    class IpcGuard {
+        +handleSafe(channel, handler) void
+        +isTrustedSender(event) boolean
+    }
+    class WindowManager {
+        +createMainWindow() BrowserWindow
+        +createLyricsWindow() BrowserWindow
+        +sendToMain(channel, payload) void
+        +sendToLyrics(channel, payload) void
+    }
+    class HttpClient {
+        +requestData(config) Promise
+        +requestRaw(config) Promise
+        +requestFull(config) Promise
+        +setWbiSigner(s) void
+        +setAuthFailureHandler(fn) void
+        -buildUrl(url, params) string
+        -buildHeaders(extra) object
+    }
+    class FetchUtils {
+        +fetchWithTimeout(url, init, opts) Promise
+    }
+    class TimeoutError
+    class AbortError
+    class RateLimiter {
+        +acquire(host, fn) Promise
+    }
+    class ConcurrencyPool {
+        +mapLimit(items, limit, fn) Promise
+    }
+    class AuthService {
+        +getState() AuthState
+        +verifySession() Promise
+        +startProbe(intervalMs) void
+        +stopProbe() void
+        +handleAuthFailure() void
+        +emit() void
+    }
+    class BiliApi {
+        +getNav() Promise
+        +getSubscriptions() Promise
+        +search(keyword, page) Promise
+        +getPlayUrl(bvid, cid) Promise
+    }
+    class UpdaterManager {
+        +initUpdater(sendStatus) void
+        +checkForUpdates() void
+        +quitAndInstall() void
+    }
+    class SentryInit {
+        +initSentry() void
+    }
+    class ErrorBoundary {
+        +componentDidCatch(error, info) void
+        +getDerivedStateFromError(error) object
+    }
+
+    WindowManager --> SecurityHardening
+    HttpClient --> FetchUtils
+    HttpClient --> RateLimiter
+    FetchUtils --> TimeoutError
+    FetchUtils --> AbortError
+    AuthService --> BiliApi
+    AuthService --> HttpClient
+    BiliApi --> HttpClient
+    BiliApi --> RateLimiter
+    AuthService --> Logger
+    HttpClient --> Logger
+    UpdaterManager --> Logger
+    SentryInit --> Logger
+    ErrorBoundary --> Logger

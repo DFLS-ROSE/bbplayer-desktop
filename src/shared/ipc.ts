@@ -25,6 +25,8 @@ import type {
   UpdateStatus,
   UserInfo,
   VideoInfo,
+  ReleaseInfo,
+  StableUpdateResult,
 } from './types'
 
 // 通道名常量（渲染 invoke → 主 handle）
@@ -73,7 +75,8 @@ export const IPC = {
   LogWrite: 'log:write',
   // updater
   AppCheckUpdate: 'app:checkUpdate',
-  AppQuitInstall: 'app:quitAndInstall',
+  AppListVersions: 'app:listVersions',
+  AppDownloadVersion: 'app:downloadVersion',
   // push（主 → 渲染）
   PlayerCommand: 'player:command',
   LyricsUpdate: 'lyrics:update',
@@ -139,7 +142,8 @@ export interface IpcRequestMap {
   [IPC.WindowToggleLyrics]: undefined
   [IPC.LogWrite]: LogEntry
   [IPC.AppCheckUpdate]: undefined
-  [IPC.AppQuitInstall]: undefined
+  [IPC.AppListVersions]: undefined
+  [IPC.AppDownloadVersion]: { tag: string }
 }
 
 // —— Result 工具 ——
@@ -222,6 +226,7 @@ export interface RendererApi {
   onUpdateStatus(cb: (status: UpdateStatus) => void): () => void
   sendLyricsUpdate(payload: LyricsUpdatePayload): void
   log(entry: LogEntry): Promise<boolean>
-  checkUpdate(): Promise<Result<boolean>>
-  quitAndInstall(): Promise<Result<boolean>>
+  checkUpdate(): Promise<Result<StableUpdateResult>>
+  listVersions(): Promise<Result<ReleaseInfo[]>>
+  downloadVersion(tag: string): Promise<Result<boolean>>
 }

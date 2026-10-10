@@ -90,7 +90,8 @@ const api: RendererApi = {
   },
   log: (entry: LogEntry) => ipcRenderer.invoke(IPC.LogWrite, entry),
   checkUpdate: () => ipcRenderer.invoke(IPC.AppCheckUpdate),
-  quitAndInstall: () => ipcRenderer.invoke(IPC.AppQuitInstall),
+  listVersions: () => ipcRenderer.invoke(IPC.AppListVersions),
+  downloadVersion: (tag: string) => ipcRenderer.invoke(IPC.AppDownloadVersion, { tag }),
 }
 
 contextBridge.exposeInMainWorld('api', api)

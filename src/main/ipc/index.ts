@@ -4,7 +4,7 @@ import type { LyricsUpdatePayload } from '../../shared/ipc'
 import type { LogEntry } from '../../shared/types'
 import { sendToLyrics } from '../window-manager'
 import { writeLogEntry } from '../logger'
-import { checkForUpdates, quitAndInstall } from '../updater'
+import { checkStableUpdate, downloadAndInstall, listVersions } from '../updater'
 import { handleSafe, handleSafeOn } from './guard'
 import type { AppStore } from '../store/app-store'
 import type { Repositories } from '../db/repositories'
@@ -41,11 +41,12 @@ export function registerAllHandlers(deps: ServiceDeps): void {
     return true
   })
 
-  // —— 自动更新 ——
-  handleSafe(IPC.AppCheckUpdate, () => wrap(() => checkForUpdates()))
-  handleSafe(IPC.AppQuitInstall, () =>
-    wrap(() => {
-      quitAndInstall()
+  // —— 内置更新（Gitee Releases）——
+  handleSafe(IPC.AppCheckUpdate, () => wrap(() => checkStableUpdate()))
+  handleSafe(IPC.AppListVersions, () => wrap(() => listVersions()))
+  handleSafe(IPC.AppDownloadVersion, (_e, payload: { tag: string }) =>
+    wrap(async () => {
+      await downloadAndInstall(payload.tag)
       return true
     }),
   )

@@ -15,7 +15,11 @@ import { sendToMain } from './window-manager'
 
 const GITEE_REPO = 'baiyunAI/bbplayer-desktop'
 const GITEE_API = 'https://gitee.com/api/v5'
-const UA = 'BBPlayer-Desktop'
+// Gitee 访问令牌：Gitee 的 release API/下载无公开匿名通道（匿名一律 404/403），必须带认证。
+// 用途：读取 release 列表 + 下载安装包。注意：随开源代码公开，如需可替换为专用令牌。
+const GITEE_TOKEN = '018b05593216aa44b592294461ad18a8'
+// 注意：Gitee 下载端点会反爬「浏览器/自定义 UA」（403），需用 curl 风格 UA 才能 302/200 下载
+const UA = 'curl/8.5.0'
 
 interface GiteeAsset {
   name: string
@@ -36,7 +40,7 @@ function push(status: UpdateStatus): void {
 }
 
 async function fetchReleases(): Promise<GiteeRelease[]> {
-  const res = await fetch(`${GITEE_API}/repos/${GITEE_REPO}/releases?per_page=100`, {
+  const res = await fetch(`${GITEE_API}/repos/${GITEE_REPO}/releases?per_page=100&access_token=${GITEE_TOKEN}`, {
     headers: { 'User-Agent': UA },
   })
   if (!res.ok) throw new Error(`Gitee 接口 HTTP ${res.status}`)
@@ -100,7 +104,9 @@ export async function downloadAndInstall(tag: string): Promise<void> {
   logInfo('updater', '开始下载更新', { traceId: createTraceId(), tag, size: exe.size })
   push({ state: 'downloading', percent: 0 })
 
-  const res = await fetch(exe.browser_download_url, { headers: { 'User-Agent': UA } })
+  const res = await fetch(exe.browser_download_url, {
+    headers: { 'User-Agent': UA, Authorization: `token ${GITEE_TOKEN}` },
+  })
   if (!res.ok || !res.body) throw new Error(`下载失败 HTTP ${res.status}`)
 
   const total = Number(res.headers.get('content-length')) || exe.size || 0

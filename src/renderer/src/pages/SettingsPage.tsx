@@ -1,12 +1,10 @@
-// 设置页：主题 / 强调色 / 自动播放 / 歌词悬浮窗 / 语言 / 更新 / 隐私 / 关于
-import { useEffect, useState } from 'react'
+// 设置页：主题 / 强调色 / 自动播放 / 歌词悬浮窗 / 语言 / 隐私 / 关于
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { ReleaseInfo, StableUpdateResult } from '@shared/types'
 import { useSettingsStore } from '@renderer/store/settings-store'
 import { BUILTIN_THEMES } from '@renderer/theme/themes'
-import { Button, toast } from '@renderer/components/ui'
+import { toast } from '@renderer/components/ui'
 import i18n, { SUPPORTED_LANGUAGES } from '@renderer/i18n'
 
 export function SettingsPage() {
@@ -182,8 +180,6 @@ export function SettingsPage() {
         </Link>
       </Section>
 
-      <UpdateSection />
-
       <Section title="关于">
         <p className="text-sm text-[var(--color-text-secondary)]">
           BBPlayer Desktop v0.1.0 · B 站音频播放器桌面端（开源 MIT）。
@@ -250,125 +246,5 @@ function RangeRow(props: {
       />
       <span className="w-12 shrink-0 text-right text-xs text-[var(--color-text-secondary)]">{display}</span>
     </div>
-  )
-}
-
-function UpdateSection() {
-  const [checking, setChecking] = useState(false)
-  const [checkResult, setCheckResult] = useState<StableUpdateResult | null>(null)
-  const [versions, setVersions] = useState<ReleaseInfo[]>([])
-  const [showVersions, setShowVersions] = useState(false)
-  const [downloadingTag, setDownloadingTag] = useState<string | null>(null)
-  const [progress, setProgress] = useState<number | null>(null)
-
-  useEffect(() => {
-    const off = window.api.onUpdateStatus((s) => {
-      if (s.state === 'downloading') setProgress(s.percent ?? 0)
-      if (s.state === 'downloaded' || s.state === 'error') {
-        setDownloadingTag(null)
-        setProgress(null)
-      }
-    })
-    return off
-  }, [])
-
-  const check = async (): Promise<void> => {
-    setChecking(true)
-    const r = await window.api.checkUpdate()
-    setChecking(false)
-    if (r.ok) setCheckResult(r.data)
-    else toast(r.error.message, 'error')
-  }
-
-  const list = async (): Promise<void> => {
-    const r = await window.api.listVersions()
-    if (r.ok) {
-      setVersions(r.data)
-      setShowVersions(true)
-    } else {
-      toast(r.error.message, 'error')
-    }
-  }
-
-  const download = async (tag: string): Promise<void> => {
-    setDownloadingTag(tag)
-    setProgress(0)
-    const r = await window.api.downloadVersion(tag)
-    if (!r.ok) {
-      toast(r.error.message, 'error')
-      setDownloadingTag(null)
-      setProgress(null)
-    }
-  }
-
-  return (
-    <Section title="更新">
-      <div className="flex items-center gap-3">
-        <Button onClick={() => void check()} disabled={checking}>
-          {checking ? '检查中…' : '检查更新'}
-        </Button>
-        <Button variant="secondary" onClick={() => void list()}>
-          选择版本
-        </Button>
-        <span className="text-xs text-[var(--color-text-secondary)]">
-          {checkResult ? `当前 v${checkResult.currentVersion}` : ''}
-        </span>
-      </div>
-
-      {checkResult && (
-        <div className="mt-3 text-sm">
-          {checkResult.hasUpdate && checkResult.latest ? (
-            <div className="flex items-center gap-2">
-              <span>发现新稳定版 v{checkResult.latest.tag}</span>
-              <Button onClick={() => void download(checkResult.latest!.tag)} disabled={downloadingTag !== null}>
-                更新
-              </Button>
-            </div>
-          ) : (
-            <span className="text-[var(--color-text-secondary)]">已是最新稳定版</span>
-          )}
-        </div>
-      )}
-
-      {downloadingTag && (
-        <div className="mt-2 text-xs text-[var(--color-text-secondary)]">
-          正在下载 v{downloadingTag}
-          {progress != null ? `（${progress}%）` : ''}，完成后自动安装…
-        </div>
-      )}
-
-      {showVersions && (
-        <div className="mt-3 flex flex-col gap-1">
-          <div className="mb-1 text-xs text-[var(--color-text-secondary)]">选择要安装的版本（含测试版）：</div>
-          {versions.length === 0 ? (
-            <div className="text-xs text-[var(--color-text-secondary)]">暂无可安装版本</div>
-          ) : (
-            versions.map((v) => (
-              <div
-                key={v.tag}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5"
-              >
-                <span className="font-medium">v{v.tag}</span>
-                <span
-                  className={`rounded px-1.5 py-0.5 text-xs ${
-                    v.prerelease ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'
-                  }`}
-                >
-                  {v.prerelease ? '测试版' : '稳定版'}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-secondary)]">{v.name}</span>
-                <Button
-                  variant="secondary"
-                  onClick={() => void download(v.tag)}
-                  disabled={downloadingTag !== null}
-                >
-                  {downloadingTag === v.tag ? '下载中' : '安装'}
-                </Button>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-    </Section>
   )
 }

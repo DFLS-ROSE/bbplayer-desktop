@@ -42,3 +42,11 @@ export function createTray(): Tray {
   tray.on('click', () => showMainWindow())
   return tray
 }
+
+/** 销毁托盘（应用退出时调用，避免托盘图标残留） */
+export function destroyTray(): void {
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy()
+  }
+  tray = null
+}

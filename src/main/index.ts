@@ -13,7 +13,7 @@ import { AuthService } from './bilibili/auth'
 import { LyricsService } from './lyrics/lyrics-service'
 import { createImporterRegistry } from './importer'
 import { createMainWindow, getMainWindow, setQuitting } from './window-manager'
-import { createTray } from './tray'
+import { createTray, destroyTray } from './tray'
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from './global-shortcuts'
 import { initializeLogger, createTraceId, logError, logInfo, logWarn } from './logger'
 import { installSecurityHardening } from './security'
@@ -104,6 +104,7 @@ if (!gotLock) {
   app.on('will-quit', () => {
     authService?.stopProbe()
     unregisterGlobalShortcuts()
+    destroyTray()
   })
 
   app.on('render-process-gone', (_event, webContents, details) => {

@@ -1,11 +1,12 @@
-// 设置页：主题 / 强调色 / 自动播放 / 歌词悬浮窗 / 语言 / 隐私 / 关于
-import type { ReactNode } from 'react'
+// 设置页：主题 / 强调色 / 自动播放 / 歌词悬浮窗 / 语言 / 隐私 / 更新 / 关于
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useSettingsStore } from '@renderer/store/settings-store'
 import { BUILTIN_THEMES } from '@renderer/theme/themes'
 import { toast } from '@renderer/components/ui'
 import i18n, { SUPPORTED_LANGUAGES } from '@renderer/i18n'
+import type { ReleaseInfo, StableUpdateResult, UpdateStatus } from '@shared/types'
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -192,7 +193,119 @@ export function SettingsPage() {
           查看数据存储说明
         </button>
       </Section>
+
+      <UpdateSection />
     </div>
+  )
+}
+
+function UpdateSection() {
+  const [status, setStatus] = useState<UpdateStatus | null>(null)
+  const [stable, setStable] = useState<StableUpdateResult | null>(null)
+  const [versions, setVersions] = useState<ReleaseInfo[]>([])
+  const [busy, setBusy] = useState(false)
+  const [downloadingTag, setDownloadingTag] = useState<string | null>(null)
+
+  const refresh = async (): Promise<void> => {
+    setBusy(true)
+    const [s, v] = await Promise.all([window.api.checkStableUpdate(), window.api.listVersions()])
+    if (s.ok) setStable(s.data)
+    if (v.ok) setVersions(v.data)
+    setBusy(false)
+  }
+
+  useEffect(() => {
+    const off = window.api.onUpdateStatus(setStatus)
+    void refresh()
+    return off
+  }, [])
+
+  const download = async (tag: string): Promise<void> => {
+    setDownloadingTag(tag)
+    const r = await window.api.downloadVersion(tag)
+    if (!r.ok) toast(`下载失败：${r.error.message}`, 'error')
+    setDownloadingTag(null)
+  }
+
+  const fmtSize = (n?: number): string => (n ? `${(n / 1024 / 1024).toFixed(1)} MB` : '')
+
+  return (
+    <Section title="更新">
+      <div className="flex items-center justify-between text-sm">
+        <span>
+          当前版本 <span className="font-semibold">v{stable?.currentVersion ?? '—'}</span>
+          {stable?.hasUpdate && (
+            <span className="ml-2 text-[var(--color-accent)]">有新版本可用</span>
+          )}
+          {stable && !stable.hasUpdate && (
+            <span className="ml-2 text-[var(--color-text-secondary)]">已是最新稳定版</span>
+          )}
+        </span>
+        <button
+          onClick={() => void refresh()}
+          disabled={busy}
+          className="rounded-full bg-[var(--color-accent)] px-4 py-1.5 text-xs text-[var(--color-on-accent)] disabled:opacity-50"
+        >
+          {busy ? '检查中…' : '检查更新'}
+        </button>
+      </div>
+
+      {status?.state === 'downloading' && (
+        <div className="mt-3 text-xs text-[var(--color-text-secondary)]">
+          正在下载更新… {status.percent ?? 0}%
+        </div>
+      )}
+      {status?.state === 'downloaded' && (
+        <div className="mt-3 text-xs text-[var(--color-accent)]">
+          更新已下载，安装程序即将启动（覆盖安装后需手动重启）
+        </div>
+      )}
+
+      {stable?.hasUpdate && stable.latest?.body && (
+        <div className="mt-3 rounded-lg bg-black/5 p-3 dark:bg-white/5">
+          <div className="mb-1.5 text-xs font-semibold text-[var(--color-text-primary)]">
+            最新稳定版更新日志
+          </div>
+          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-[var(--color-text-secondary)]">
+            {stable.latest.body}
+          </pre>
+        </div>
+      )}
+
+      {versions.length > 0 && (
+        <div className="mt-4 flex flex-col gap-2">
+          {versions.map((v) => (
+            <div
+              key={v.tag}
+              className="flex items-center justify-between rounded-lg bg-black/5 px-3 py-2 text-sm dark:bg-white/5"
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{v.name || v.tag}</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] ${
+                    v.prerelease
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                      : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  }`}
+                >
+                  {v.prerelease ? '测试版' : '稳定版'}
+                </span>
+                {v.size != null && (
+                  <span className="text-xs text-[var(--color-text-secondary)]">{fmtSize(v.size)}</span>
+                )}
+              </div>
+              <button
+                onClick={() => void download(v.tag)}
+                disabled={downloadingTag === v.tag}
+                className="rounded-full bg-black/10 px-3 py-1 text-xs hover:bg-black/15 disabled:opacity-50 dark:bg-white/10 dark:hover:bg-white/15"
+              >
+                {downloadingTag === v.tag ? '下载中…' : '下载安装'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
   )
 }
 

@@ -1,17 +1,10 @@
-// 歌词自动匹配 / 搜索 / 抓取（QQ 音乐 / 酷狗；网易云版权少已移除）
-// 匹配策略：标题清洗 + 多关键词降级 + 候选评分排序（歌名+歌手）+ 歌词内容校验
+// 歌词自动匹配 / 搜索 / 抓取（酷狗；网易云版权少、QQ 搜索需签名均已移除）
+// 匹配策略：标题清洗 + 候选评分排序（歌名+歌手）+ 歌词内容校验
 import { DEFAULT_UA } from '../../shared/constants'
 import type { LyricCandidate, LyricFetchResult } from '../../shared/types'
 import { fetchWithTimeout } from '../net/fetch-utils'
 import { logWarn } from '../logger'
 
-interface QqSearchResp {
-  data?: { song?: { list?: { songmid?: string; songname?: string; singer?: { name?: string }[] }[] } }
-}
-interface QqLyricResp {
-  lyric?: string
-  trans?: string
-}
 interface KugouSearchResp {
   data?: { lists?: { FileHash?: string; SongName?: string; SingerName?: string }[] }
 }
@@ -45,14 +38,6 @@ export class LyricsService {
   }
 
   async fetch(source: string, songId: string, title?: string): Promise<LyricFetchResult> {
-    if (source === 'qq') {
-      const data = await this.fetchJson<QqLyricResp>(
-        'https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg',
-        { songmid: songId, format: 'json', nobase64: 1, g_tk: 5381 },
-        { Referer: 'https://y.qq.com/' },
-      )
-      return { source, lrc: data?.lyric ?? '', translation: data?.trans ?? '' }
-    }
     if (source === 'kugou') {
       // 新版歌词 API：krcs 搜索 → lyrics 下载（content 为 base64 LRC）
       const kw = title || songId
@@ -74,29 +59,10 @@ export class LyricsService {
     throw new Error(`未知歌词源：${source}`)
   }
 
-  /** 两个源搜索一次（返回未排序候选）；仅用标题搜索，避免把 UP 主名拼进关键词污染匹配 */
+  /** 酷狗搜索一次（返回未排序候选）；仅用标题搜索，避免把 UP 主名拼进关键词污染匹配 */
   private async searchOnce(title: string): Promise<LyricCandidate[]> {
     const kw = title
     const candidates: LyricCandidate[] = []
-
-    // QQ 音乐
-    try {
-      const data = await this.fetchJson<QqSearchResp>(
-        'https://c.y.qq.com/soso/fcgi-bin/client_search_cp',
-        { format: 'json', w: kw, n: 10, t: 0 },
-        { Referer: 'https://y.qq.com/' },
-      )
-      for (const s of data?.data?.song?.list ?? []) {
-        candidates.push({
-          source: 'qq',
-          songId: s.songmid ?? '',
-          title: s.songname ?? '',
-          artist: (s.singer ?? []).map((a) => a.name ?? '').filter(Boolean).join('/'),
-        })
-      }
-    } catch (e) {
-      logWarn('lyrics', 'QQ 音乐搜索失败', { error: e instanceof Error ? e.message : String(e) })
-    }
 
     // 酷狗
     try {
@@ -200,14 +166,10 @@ export function scoreCandidate(c: { title: string; artist: string }, title: stri
   return score
 }
 
-/** 生成多组搜索关键词（原始标题 → 清洗后标题）；artist（UP 主名）只用于评分，不参与搜索 */
+/** 生成搜索关键词：优先清洗后的标题（去掉【】/修饰词等杂质），单组以缩短搜索耗时 */
 function buildKeywordSets(title: string): string[] {
-  const sets: string[] = [title]
   const cleaned = cleanTitle(title)
-  if (cleaned && cleaned !== title) {
-    sets.push(cleaned)
-  }
-  return sets
+  return [cleaned || title]
 }
 
 /** 判定抓取的歌词是否为有效 LRC（非空且含时间标签） */

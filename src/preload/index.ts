@@ -91,8 +91,9 @@ const api: RendererApi = {
     ipcRenderer.send(IPC.LyricsUpdate, payload)
   },
   log: (entry: LogEntry) => ipcRenderer.invoke(IPC.LogWrite, entry),
-  checkUpdate: () => ipcRenderer.invoke(IPC.AppCheckUpdate),
-  quitAndInstall: () => ipcRenderer.invoke(IPC.AppQuitInstall),
+  checkStableUpdate: () => ipcRenderer.invoke(IPC.AppCheckStableUpdate),
+  listVersions: () => ipcRenderer.invoke(IPC.AppListVersions),
+  downloadVersion: (tag) => ipcRenderer.invoke(IPC.AppDownloadVersion, { tag }),
 }
 
 contextBridge.exposeInMainWorld('api', api)

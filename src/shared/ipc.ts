@@ -18,10 +18,12 @@ import type {
   PlayUrlResult,
   QrCodeData,
   QrPollResult,
+  ReleaseInfo,
   Result,
   SearchResult,
   SessionContext,
   Settings,
+  StableUpdateResult,
   Track,
   UpdateStatus,
   UserInfo,
@@ -74,9 +76,10 @@ export const IPC = {
   WindowToggleLyrics: 'window:toggleLyrics',
   // logging
   LogWrite: 'log:write',
-  // updater
-  AppCheckUpdate: 'app:checkUpdate',
-  AppQuitInstall: 'app:quitAndInstall',
+  // updater（GitHub Releases）
+  AppCheckStableUpdate: 'app:checkStableUpdate',
+  AppListVersions: 'app:listVersions',
+  AppDownloadVersion: 'app:downloadVersion',
   // push（主 → 渲染）
   PlayerCommand: 'player:command',
   LyricsUpdate: 'lyrics:update',
@@ -143,8 +146,9 @@ export interface IpcRequestMap {
   [IPC.Import]: { source: 'netease' | 'qq'; url: string }
   [IPC.WindowToggleLyrics]: undefined
   [IPC.LogWrite]: LogEntry
-  [IPC.AppCheckUpdate]: undefined
-  [IPC.AppQuitInstall]: undefined
+  [IPC.AppCheckStableUpdate]: undefined
+  [IPC.AppListVersions]: undefined
+  [IPC.AppDownloadVersion]: { tag: string }
 }
 
 // —— Result 工具 ——
@@ -229,6 +233,7 @@ export interface RendererApi {
   onUpdateStatus(cb: (status: UpdateStatus) => void): () => void
   sendLyricsUpdate(payload: LyricsUpdatePayload): void
   log(entry: LogEntry): Promise<boolean>
-  checkUpdate(): Promise<Result<boolean>>
-  quitAndInstall(): Promise<Result<boolean>>
+  checkStableUpdate(): Promise<Result<StableUpdateResult>>
+  listVersions(): Promise<Result<ReleaseInfo[]>>
+  downloadVersion(tag: string): Promise<Result<boolean>>
 }

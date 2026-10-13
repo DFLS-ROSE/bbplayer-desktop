@@ -260,3 +260,20 @@ export interface UpdateStatus {
   percent?: number
   message?: string
 }
+
+// —— GitHub Release 版本信息 ——
+export interface ReleaseInfo {
+  tag: string
+  name: string
+  prerelease: boolean // true=测试版，false=稳定版
+  publishedAt: string
+  body?: string
+  size?: number
+  url?: string // Windows 安装包下载地址
+}
+
+export interface StableUpdateResult {
+  hasUpdate: boolean
+  currentVersion: string
+  latest: ReleaseInfo | null
+}

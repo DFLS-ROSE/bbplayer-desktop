@@ -55,9 +55,10 @@ class AudioEngine {
     if (queue && index != null) {
       store.setQueue(queue, index)
     } else {
+      // 未传入队列：若已在队列则跳到该位置，否则追加到队列末尾（不清空当前队列）
       const existing = store.queue.findIndex((t) => t.id === track.id)
       if (existing >= 0) store.setQueue(store.queue, existing)
-      else store.setQueue([track], 0)
+      else store.setQueue([...store.queue, track], store.queue.length)
     }
 
     store.setCurrentTrack(track)
@@ -118,8 +119,18 @@ class AudioEngine {
     store.setPosition(startAt)
     this.setVolume(store.volume)
 
-    await this.ensureAudioGraph()
-    await this.audio.play()
+    try {
+      await this.ensureAudioGraph()
+      await this.audio.play()
+    } catch (e) {
+      usePlayerStore.getState().setPlaying(false)
+      void window.api.log({
+        level: 'warn',
+        scope: 'audio',
+        message: '播放失败',
+        extra: { error: e instanceof Error ? e.message : String(e), trackId: resolved.id },
+      })
+    }
     void this.recordHistory(resolved)
     void this.saveSession()
   }

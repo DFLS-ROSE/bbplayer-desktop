@@ -90,7 +90,7 @@ export function SearchPage() {
               emptyText={keyword ? '未找到相关视频' : '输入关键词开始搜索'}
               onPlay={(index) => {
                 const t = biliResult?.items?.[index]
-                if (t) void engine.playTrack(t, [t], 0)
+                if (t) void engine.playTrack(t)
               }}
             />
           )
@@ -100,7 +100,7 @@ export function SearchPage() {
             emptyText="本地歌单内未找到匹配内容"
             onPlay={(index) => {
               const t = localResults[index]
-              if (t) void engine.playTrack(t, [t], 0)
+              if (t) void engine.playTrack(t)
             }}
           />
         )}

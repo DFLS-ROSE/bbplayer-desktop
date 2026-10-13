@@ -276,4 +276,5 @@ export interface StableUpdateResult {
   hasUpdate: boolean
   currentVersion: string
   latest: ReleaseInfo | null
+  error?: string // 检查失败原因（如网络无法访问 GitHub），成功时缺省
 }

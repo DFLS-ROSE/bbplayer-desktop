@@ -11,7 +11,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { IPC } from '../shared/ipc'
 import type { ReleaseInfo, StableUpdateResult, UpdateStatus } from '../shared/types'
-import { createTraceId, logError, logInfo } from './logger'
+import { createTraceId, logError, logInfo, logWarn } from './logger'
 import { sendToMain } from './window-manager'
 
 const GITHUB_OWNER = 'LuoPoTou666'
@@ -38,11 +38,21 @@ function push(status: UpdateStatus): void {
 }
 
 async function fetchReleases(): Promise<GithubRelease[]> {
-  const res = await fetch(`${GITHUB_API}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=100`, {
-    headers: { 'User-Agent': UA, Accept: 'application/vnd.github+json' },
-  })
-  if (!res.ok) throw new Error(`GitHub 接口 HTTP ${res.status}`)
-  return (await res.json()) as GithubRelease[]
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15000)
+  try {
+    const res = await fetch(`${GITHUB_API}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=100`, {
+      headers: { 'User-Agent': UA, Accept: 'application/vnd.github+json' },
+      signal: controller.signal,
+    })
+    if (!res.ok) throw new Error(`GitHub 接口 HTTP ${res.status}`)
+    return (await res.json()) as GithubRelease[]
+  } catch (e) {
+    if (controller.signal.aborted) throw new Error('检查更新超时：无法访问 GitHub（网络受限或需代理）')
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function toReleaseInfo(r: GithubRelease): ReleaseInfo {
@@ -75,14 +85,20 @@ export function initUpdater(): void {
   logInfo('updater', '更新模块就绪（GitHub Releases）', { traceId: createTraceId() })
 }
 
-/** 检查稳定版更新：检索最新非 pre-release 版本，对比当前版本 */
+/** 检查稳定版更新：检索最新非 pre-release 版本，对比当前版本。当前版本始终返回（本地信息，不依赖网络）。 */
 export async function checkStableUpdate(): Promise<StableUpdateResult> {
-  const releases = await fetchReleases()
   const current = app.getVersion()
-  const stable = releases.filter((r) => !r.prerelease)
-  const latest = stable.length > 0 ? toReleaseInfo(stable[0]) : null
-  const hasUpdate = latest ? compareVersion(latest.tag, current) > 0 : false
-  return { hasUpdate, currentVersion: current, latest }
+  try {
+    const releases = await fetchReleases()
+    const stable = releases.filter((r) => !r.prerelease)
+    const latest = stable.length > 0 ? toReleaseInfo(stable[0]) : null
+    const hasUpdate = latest ? compareVersion(latest.tag, current) > 0 : false
+    return { hasUpdate, currentVersion: current, latest }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    logWarn('updater', '检查更新失败', { traceId: createTraceId(), error: msg })
+    return { hasUpdate: false, currentVersion: current, latest: null, error: msg }
+  }
 }
 
 /** 列出所有版本（含测试版），按发布时间倒序（仅返回有 Windows 安装包的） */

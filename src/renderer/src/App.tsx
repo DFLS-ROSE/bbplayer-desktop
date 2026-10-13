@@ -1,5 +1,5 @@
 // 根组件：react-query + HashRouter + 主题 + 媒体键 + 会话恢复 + i18n
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider, useTranslation } from 'react-i18next'
@@ -16,12 +16,14 @@ import { PlayerBar } from './components/PlayerBar'
 import { LoginModal, useLoginModal } from './components/LoginModal'
 import { ToastHost, toast } from './components/ui'
 import { HomePage } from './pages/HomePage'
-import { SearchPage } from './pages/SearchPage'
-import { PlaylistPage } from './pages/PlaylistPage'
-import { HistoryPage } from './pages/HistoryPage'
-import { SettingsPage } from './pages/SettingsPage'
-import { NowPlayingPage } from './pages/NowPlayingPage'
-import { PrivacyPage } from './pages/PrivacyPage'
+
+// 非首屏页面懒加载：减小首屏 bundle，加快启动
+const SearchPage = lazy(() => import('./pages/SearchPage').then((m) => ({ default: m.SearchPage })))
+const PlaylistPage = lazy(() => import('./pages/PlaylistPage').then((m) => ({ default: m.PlaylistPage })))
+const HistoryPage = lazy(() => import('./pages/HistoryPage').then((m) => ({ default: m.HistoryPage })))
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+const NowPlayingPage = lazy(() => import('./pages/NowPlayingPage').then((m) => ({ default: m.NowPlayingPage })))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
 
 export default function App() {
   return (
@@ -140,15 +142,21 @@ function Root() {
         <div className="flex min-h-0 flex-1">
           <Sidebar />
           <main className="min-w-0 flex-1 overflow-y-auto">
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/playlists" element={<PlaylistPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/now-playing" element={<NowPlayingPage />} />
-              <Route path="/privacy" element={<PrivacyPage />} />
-            </Routes>
+            <Suspense
+              fallback={
+                <div className="p-8 text-sm text-[var(--color-text-secondary)]">加载中…</div>
+              }
+            >
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/playlists" element={<PlaylistPage />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/now-playing" element={<NowPlayingPage />} />
+                <Route path="/privacy" element={<PrivacyPage />} />
+              </Routes>
+            </Suspense>
           </main>
         </div>
         <PlayerBar />

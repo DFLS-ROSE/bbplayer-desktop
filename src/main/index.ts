@@ -87,13 +87,23 @@ if (!gotLock) {
     createTray()
     registerGlobalShortcuts()
 
-    // 登录态：启动校验 + 定期探活
-    void auth.verifySession()
-    auth.startProbe()
-
-    // 自动更新 + 崩溃上报（P2 预留，默认关闭）
+    // 自动更新模块就绪（轻量，仅日志）
     initUpdater()
-    void initSentry(appStore)
+
+    // 非关键异步初始化：窗口首屏就绪后再执行，避免与首屏渲染抢占资源
+    const runLazyInit = (): void => {
+      void auth.verifySession()
+      auth.startProbe()
+      void initSentry(appStore)
+    }
+    let lazyInitDone = false
+    const fireLazyInit = (): void => {
+      if (lazyInitDone) return
+      lazyInitDone = true
+      runLazyInit()
+    }
+    getMainWindow()?.once('ready-to-show', fireLazyInit)
+    setTimeout(fireLazyInit, 5000) // 兜底：首屏事件丢失时 5s 后强制执行
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow()

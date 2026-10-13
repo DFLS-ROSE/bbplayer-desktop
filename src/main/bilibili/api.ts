@@ -13,7 +13,7 @@ import type { Buvid3Manager } from './buvid3'
 import type { HttpClient } from './http-client'
 import type { UrlResolver } from './url-resolver'
 import { toHttps } from '../../shared/security'
-import { createTraceId, logDebug } from '../logger'
+import { createTraceId, logDebug, logWarn } from '../logger'
 
 interface ViewResponse {
   bvid?: string
@@ -228,13 +228,22 @@ export class BiliApi {
     for (const s of (seriesData?.list ?? []).slice(0, 5)) {
       const sid = s?.series_id
       if (!sid) continue
-      const arch = await this.http.get<{ archives?: SeriesArchive[] }>(
-        `${BILI_API_BASE}/x/series/archives`,
-        { mid: nav.mid, series_id: sid, pn: 1, ps: 30 },
-        { wbi: true },
-      )
-      for (const a of arch?.archives ?? []) {
-        if (a?.bvid) tracks.push(this.seriesArchiveToTrack(a))
+      try {
+        const arch = await this.http.get<{ archives?: SeriesArchive[] }>(
+          `${BILI_API_BASE}/x/series/archives`,
+          { mid: nav.mid, series_id: sid, pn: 1, ps: 30 },
+          { wbi: true },
+        )
+        for (const a of arch?.archives ?? []) {
+          if (a?.bvid) tracks.push(this.seriesArchiveToTrack(a))
+        }
+      } catch (e) {
+        // 单个订阅合集的子列表失败不拖垮整体：跳过该合集并告警；未登录/总列表失败仍正常抛出
+        logWarn('bili.api', '获取订阅合集子列表失败，跳过该合集', {
+          traceId: createTraceId(),
+          seriesId: sid,
+          error: e instanceof Error ? e.message : String(e),
+        })
       }
     }
     return tracks

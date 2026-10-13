@@ -57,17 +57,17 @@ export function NowPlayingPage() {
       {/* 前景 */}
       <div className="relative z-10 flex h-full w-full">
         {/* 左：封面 + 信息 + 控制 */}
-        <div className="flex w-[40%] min-w-[230px] shrink-0 flex-col items-center justify-center gap-4 p-6">
+        <div className="flex w-[40%] min-w-[220px] shrink-0 flex-col items-center justify-center gap-4 overflow-y-auto overflow-x-hidden p-6">
           {track?.coverUrl ? (
             <img
               src={track.coverUrl}
               alt=""
-              className="h-[min(15rem,32vh)] w-[min(15rem,32vh)] rounded-3xl object-cover"
+              className="aspect-square w-full max-w-[15rem] rounded-3xl object-cover"
               style={{ boxShadow: 'var(--elevation-3)' }}
             />
           ) : (
             <div
-              className="flex h-[min(15rem,32vh)] w-[min(15rem,32vh)] items-center justify-center rounded-3xl bg-[var(--color-accent-container)] text-5xl text-[var(--color-on-accent-container)]"
+              className="flex aspect-square w-full max-w-[15rem] items-center justify-center rounded-3xl bg-[var(--color-accent-container)] text-5xl text-[var(--color-on-accent-container)]"
               style={{ boxShadow: 'var(--elevation-2)' }}
             >
               ♪
@@ -93,7 +93,7 @@ export function NowPlayingPage() {
               <span className="shrink-0">{formatTime(duration || track?.duration || 0)}</span>
             </div>
 
-            <div className="mt-4 flex items-center justify-center gap-3">
+            <div className="mt-4 flex items-center justify-center gap-2 sm:gap-3">
               <button
                 onClick={cycleMode}
                 title="播放模式"

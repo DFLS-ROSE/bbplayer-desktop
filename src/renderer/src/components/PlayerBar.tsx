@@ -53,7 +53,7 @@ export function PlayerBar() {
       <div className="flex items-center gap-4 px-4 py-3">
         {/* 曲目信息 */}
         <div
-          className="flex w-52 min-w-0 cursor-pointer items-center gap-3"
+          className="flex w-36 min-w-0 shrink cursor-pointer items-center gap-3 xl:w-52"
           onClick={() => navigate('/now-playing')}
         >
           {currentTrack?.coverUrl ? (
@@ -114,7 +114,7 @@ export function PlayerBar() {
 
         {/* 右侧 */}
         <div className="flex shrink-0 items-center gap-1">
-          <div className="flex items-center gap-1">
+          <div className="hidden items-center gap-1 lg:flex">
             <span className="text-xs text-[var(--color-text-secondary)]">音量</span>
             <input
               type="range"

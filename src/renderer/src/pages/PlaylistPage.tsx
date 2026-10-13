@@ -55,7 +55,7 @@ export function PlaylistPage() {
   return (
     <div className="flex h-full">
       {/* 左侧歌单列表 */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-black/5 p-3 dark:border-white/10">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-black/5 p-3 dark:border-white/10">
         <div className="mb-3 flex gap-2">
           <input
             value={newName}
@@ -67,7 +67,7 @@ export function PlaylistPage() {
           <Button onClick={() => void createLocal()}>新建</Button>
         </div>
 
-        <div className="mb-2 flex gap-1">
+        <div className="mb-2 flex flex-wrap gap-1">
           <SyncFavorites />
           <SyncSubscriptions />
         </div>

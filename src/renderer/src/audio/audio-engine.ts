@@ -72,6 +72,7 @@ class AudioEngine {
         if (r.ok) {
           resolved = {
             ...resolved,
+            id: `${resolved.bvid}_${r.data.cid}`,
             cid: r.data.cid,
             aid: r.data.aid,
             title: r.data.title || resolved.title,
@@ -139,7 +140,10 @@ class AudioEngine {
   private applyResolved(resolved: Track): void {
     const s = usePlayerStore.getState()
     s.setCurrentTrack(resolved)
-    const idx = s.queue.findIndex((t) => t.id === resolved.id)
+    // id 会在补齐 cid 后变化；优先精确匹配 id，兜底按 bvid 匹配尚未解析的旧条目
+    const idx = s.queue.findIndex(
+      (t) => t.id === resolved.id || (t.bvid === resolved.bvid && !t.cid),
+    )
     if (idx >= 0) {
       const q = [...s.queue]
       q[idx] = resolved

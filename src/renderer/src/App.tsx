@@ -141,7 +141,7 @@ function Root() {
       <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg)] text-[var(--color-text-primary)]">
         <div className="flex min-h-0 flex-1">
           <Sidebar />
-          <main className="min-w-0 flex-1 overflow-y-auto">
+          <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
             <Suspense
               fallback={
                 <div className="p-8 text-sm text-[var(--color-text-secondary)]">加载中…</div>

@@ -74,6 +74,8 @@ export function LyricsView() {
           const r = await window.api.lyrics.fetch(c.source, c.songId, c.title)
           if (cancelled) return
           if (!r.ok) continue
+          // 校验歌词本体歌名与实际曲目一致，防止串到别的歌
+          if (!lyricMatchesTrack(r.data.lrc, currentTrack.title)) continue
           const parsed = parseLyric(r.data.lrc, {
             translation: r.data.translation,
             roman: r.data.roman,
@@ -158,18 +160,36 @@ export function LyricsView() {
     saveCache(raw.source, raw)
   }
 
+  /** 校验歌词元数据 [ti:]（歌名）与目标标题是否匹配，避免自动匹配串到同名/翻唱的歌 */
+  const lyricMatchesTrack = (lrc: string, title: string): boolean => {
+    const ti = lrc.match(/\[ti:([^\]]+)\]/i)?.[1]
+    if (!ti) return true // 无 [ti:] 标签时放行
+    const norm = (s: string): string =>
+      s.toLowerCase().replace(/[\s\-—–|/·_,、，。.!！?？"'《》「」【】()（）[\]{}]/g, '')
+    const clean = (s: string): string =>
+      s.replace(/[-—–|/].*$/, '').replace(/[（(【\[〔].*?[）)】\]〕]/g, '').trim()
+    const a = norm(clean(ti))
+    const b = norm(clean(title))
+    if (!a || !b) return true
+    if (a === b || a.includes(b) || b.includes(a)) return true
+    const set = new Set(a)
+    let common = 0
+    for (const ch of b) if (set.has(ch)) common++
+    return common / Math.max(a.length, b.length) > 0.55
+  }
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/5 px-4 py-2 dark:border-white/10">
-        <span className="flex items-center gap-2 text-sm">
-          <span className="font-medium">歌词</span>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-black/5 px-4 py-2 dark:border-white/10">
+        <span className="flex min-w-0 items-center gap-2 text-sm">
+          <span className="shrink-0 font-medium">歌词</span>
           {lyricData && (
-            <span className="text-xs text-[var(--color-text-secondary)]">
+            <span className="truncate text-xs text-[var(--color-text-secondary)]">
               来源：{SOURCE_LABELS[lyricData.source] ?? lyricData.source}
             </span>
           )}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <Button variant="ghost" onClick={() => adjustOffset(-0.5)}>偏移 -0.5s</Button>
           <Button variant="ghost" onClick={() => adjustOffset(0.5)}>偏移 +0.5s</Button>
           <Button variant="secondary" onClick={() => void openSearch()}>切换来源</Button>

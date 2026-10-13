@@ -42,6 +42,12 @@ test('scoreCandidate 歌手匹配额外加分', () => {
   assert.ok(withArtist > withoutArtist)
 })
 
+test('scoreCandidate 版本标记候选（夜曲 - A35）正确匹配原版', () => {
+  const orig = scoreCandidate({ title: '夜曲 - A35', artist: '周杰伦' }, '周杰伦 - 夜曲')
+  const cover = scoreCandidate({ title: '夜曲', artist: 'Xai小爱' }, '周杰伦 - 夜曲')
+  assert.ok(orig > cover, `原版(${orig})应高于翻唱(${cover})`)
+})
+
 test('isValidLyric 识别有效 LRC', () => {
   assert.equal(isValidLyric('[00:12.00]歌词'), true)
   assert.equal(isValidLyric('[00:12]歌词'), true)

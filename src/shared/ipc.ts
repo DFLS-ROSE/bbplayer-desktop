@@ -137,7 +137,7 @@ export interface IpcRequestMap {
   [IPC.BiliFavorites]: undefined
   [IPC.BiliSubscriptions]: undefined
   [IPC.LyricsSearch]: { title: string; artist?: string }
-  [IPC.LyricsFetch]: { source: string; songId: string }
+  [IPC.LyricsFetch]: { source: string; songId: string; title?: string }
   [IPC.LyricsGetCached]: { trackId: string }
   [IPC.LyricsSaveCached]: { entry: LyricCacheEntry }
   [IPC.Import]: { source: 'netease' | 'qq'; url: string }
@@ -213,7 +213,7 @@ export interface RendererApi {
   }
   lyrics: {
     search(title: string, artist?: string): Promise<Result<LyricCandidate[]>>
-    fetch(source: string, songId: string): Promise<Result<LyricFetchResult>>
+    fetch(source: string, songId: string, title?: string): Promise<Result<LyricFetchResult>>
     getCached(trackId: string): Promise<Result<LyricCacheEntry | null>>
     saveCached(entry: LyricCacheEntry): Promise<Result<boolean>>
   }

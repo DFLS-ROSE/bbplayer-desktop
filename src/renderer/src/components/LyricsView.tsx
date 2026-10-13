@@ -71,7 +71,7 @@ export function LyricsView() {
         const candidates = search.ok ? search.data : []
         // 按评分顺序遍历候选，取第一个能解析出歌词行的（跳过翻唱/空歌词）
         for (const c of candidates.slice(0, 8)) {
-          const r = await window.api.lyrics.fetch(c.source, c.songId)
+          const r = await window.api.lyrics.fetch(c.source, c.songId, c.title)
           if (cancelled) return
           if (!r.ok) continue
           const parsed = parseLyric(r.data.lrc, {
@@ -143,7 +143,7 @@ export function LyricsView() {
   }
 
   const pickCandidate = async (c: LyricCandidate): Promise<void> => {
-    const r = await window.api.lyrics.fetch(c.source, c.songId)
+    const r = await window.api.lyrics.fetch(c.source, c.songId, c.title)
     if (!r.ok) {
       toast(r.error.message, 'error')
       return

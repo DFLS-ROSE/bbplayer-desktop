@@ -1,18 +1,10 @@
-// 歌词自动匹配 / 搜索 / 抓取（网易云 / QQ 音乐 / 酷狗）
-// 匹配策略：标题清洗 + 多关键词降级 + 候选评分排序 + 歌词内容校验
+// 歌词自动匹配 / 搜索 / 抓取（QQ 音乐 / 酷狗；网易云版权少已移除）
+// 匹配策略：标题清洗 + 多关键词降级 + 候选评分排序（歌名+歌手）+ 歌词内容校验
 import { DEFAULT_UA } from '../../shared/constants'
 import type { LyricCandidate, LyricFetchResult } from '../../shared/types'
 import { fetchWithTimeout } from '../net/fetch-utils'
 import { logWarn } from '../logger'
 
-interface NeteaseSearchResp {
-  result?: { songs?: { id?: number; name?: string; artists?: { name?: string }[] }[] }
-}
-interface NeteaseLyricResp {
-  lrc?: { lyric?: string }
-  tlyric?: { lyric?: string }
-  romalrc?: { lyric?: string }
-}
 interface QqSearchResp {
   data?: { song?: { list?: { songmid?: string; songname?: string; singer?: { name?: string }[] }[] } }
 }
@@ -23,8 +15,11 @@ interface QqLyricResp {
 interface KugouSearchResp {
   data?: { lists?: { FileHash?: string; SongName?: string; SingerName?: string }[] }
 }
-interface KugouLyricResp {
-  data?: { lyrics?: string }
+interface KugouKrcsResp {
+  candidates?: { id?: string; accesskey?: string }[]
+}
+interface KugouDownloadResp {
+  content?: string
 }
 
 export class LyricsService {
@@ -49,20 +44,7 @@ export class LyricsService {
     return scored.map((x) => x.c)
   }
 
-  async fetch(source: string, songId: string): Promise<LyricFetchResult> {
-    if (source === 'netease') {
-      const data = await this.fetchJson<NeteaseLyricResp>(
-        'https://music.163.com/api/song/lyric',
-        { id: songId, lv: 1, kv: 1, tv: -1 },
-        { Referer: 'https://music.163.com/' },
-      )
-      return {
-        source,
-        lrc: data?.lrc?.lyric ?? '',
-        translation: data?.tlyric?.lyric,
-        roman: data?.romalrc?.lyric,
-      }
-    }
+  async fetch(source: string, songId: string, title?: string): Promise<LyricFetchResult> {
     if (source === 'qq') {
       const data = await this.fetchJson<QqLyricResp>(
         'https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg',
@@ -72,39 +54,30 @@ export class LyricsService {
       return { source, lrc: data?.lyric ?? '', translation: data?.trans ?? '' }
     }
     if (source === 'kugou') {
-      const data = await this.fetchJson<KugouLyricResp>(
-        'https://wwwapi.kugou.com/yy/index.php',
-        { r: 'play/getdata', hash: songId },
+      // 新版歌词 API：krcs 搜索 → lyrics 下载（content 为 base64 LRC）
+      const kw = title || songId
+      const search = await this.fetchJson<KugouKrcsResp>(
+        'https://krcs.kugou.com/search',
+        { ver: 1, man: 'yes', client: 'mobi', keyword: kw, hash: songId },
         { Referer: 'https://www.kugou.com/' },
       )
-      return { source, lrc: data?.data?.lyrics ?? '' }
+      const cand = search?.candidates?.[0]
+      if (!cand?.id || !cand?.accesskey) return { source, lrc: '' }
+      const dl = await this.fetchJson<KugouDownloadResp>(
+        'https://lyrics.kugou.com/download',
+        { ver: 1, client: 'pc', id: cand.id, accesskey: cand.accesskey, fmt: 'lrc', charset: 'utf8' },
+        { Referer: 'https://www.kugou.com/' },
+      )
+      const lrc = dl?.content ? Buffer.from(dl.content, 'base64').toString('utf8') : ''
+      return { source, lrc }
     }
     throw new Error(`未知歌词源：${source}`)
   }
 
-  /** 三个源搜索一次（返回未排序候选）；仅用标题搜索，避免把 UP 主名拼进关键词污染匹配 */
+  /** 两个源搜索一次（返回未排序候选）；仅用标题搜索，避免把 UP 主名拼进关键词污染匹配 */
   private async searchOnce(title: string): Promise<LyricCandidate[]> {
     const kw = title
     const candidates: LyricCandidate[] = []
-
-    // 网易云
-    try {
-      const data = await this.fetchJson<NeteaseSearchResp>(
-        'https://music.163.com/api/search/get',
-        { s: kw, type: 1, limit: 10 },
-        { Referer: 'https://music.163.com/' },
-      )
-      for (const s of data?.result?.songs ?? []) {
-        candidates.push({
-          source: 'netease',
-          songId: String(s.id ?? ''),
-          title: s.name ?? '',
-          artist: (s.artists ?? []).map((a) => a.name ?? '').filter(Boolean).join('/'),
-        })
-      }
-    } catch (e) {
-      logWarn('lyrics', '网易云搜索失败', { error: e instanceof Error ? e.message : String(e) })
-    }
 
     // QQ 音乐
     try {
@@ -184,6 +157,15 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[\s\-—–|/·_、,，。.!！?？"'《》「」【】()（）[\]{}]/g, '')
 }
 
+/** 清洗候选标题的版本/演唱标记："夜曲 - A35"、"夜曲 (DJ版)" → "夜曲" */
+function cleanCandidateTitle(t: string): string {
+  return t
+    .replace(/[-—–|/].*$/, '')
+    .replace(/[（(【\[〔].*?[）)】\]〕]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /** 字符重叠比例（0..1） */
 function overlapScore(a: string, b: string): number {
   if (!a || !b) return 0
@@ -193,23 +175,26 @@ function overlapScore(a: string, b: string): number {
   return common / Math.max(a.length, b.length)
 }
 
-/** 候选匹配度评分：标题相似度 + 歌手匹配 - 变体惩罚 */
+/** 候选匹配度评分：歌名匹配（清洗版本标记）+ 歌手匹配 - 变体惩罚 */
 export function scoreCandidate(c: { title: string; artist: string }, title: string, artist?: string): number {
-  const ct = normalize(c.title)
+  const ct = normalize(cleanCandidateTitle(c.title))
   const tt = normalize(cleanTitle(title))
   let score = 0
   if (ct && tt) {
     if (ct === tt) score += 100
-    else if (ct.includes(tt) || tt.includes(ct)) score += 70
+    else if (tt.includes(ct) || ct.includes(tt)) score += 70
     else score += Math.round(overlapScore(ct, tt) * 40)
   }
+  // 歌手匹配：候选 artist 出现在目标标题里（标题含歌手名，如"周杰伦 夜曲"）
+  const ca = normalize(c.artist)
+  if (ca && tt && ca !== ct && tt.includes(ca)) score += 40
+  // artist 参数（UP 主名）匹配
   if (artist) {
-    const ca = normalize(c.artist)
-    const ta = normalize(artist)
-    if (ca && ta && (ca.includes(ta) || ta.includes(ca))) score += 40
+    const ua = normalize(artist)
+    if (ca && ua && (ca.includes(ua) || ua.includes(ca))) score += 40
   }
   // 翻唱/现场/纯音乐等变体降权
-  if (/(深情版|live|cover|remix|伴奏|纯音乐|翻唱|dj|现场|演唱会|合唱|电音|改编|口琴|钢琴|吉他|卡祖笛)/i.test(c.title)) {
+  if (/(深情版|live|cover|remix|伴奏|纯音乐|翻唱|dj|现场|演唱会|合唱|电音|改编|口琴|钢琴|吉他|卡祖笛|电台)/i.test(c.title)) {
     score -= 25
   }
   return score

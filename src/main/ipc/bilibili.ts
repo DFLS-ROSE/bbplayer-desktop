@@ -47,8 +47,8 @@ export function registerBilibiliHandlers({ api, auth, lyricsService, importers }
   handleSafe(IPC.LyricsSearch, (_e, payload: { title: string; artist?: string }) =>
     wrap(() => lyricsService.search(payload.title, payload.artist)),
   )
-  handleSafe(IPC.LyricsFetch, (_e, payload: { source: string; songId: string }) =>
-    wrap(() => lyricsService.fetch(payload.source, payload.songId)),
+  handleSafe(IPC.LyricsFetch, (_e, payload: { source: string; songId: string; title?: string }) =>
+    wrap(() => lyricsService.fetch(payload.source, payload.songId, payload.title)),
   )
 
   // —— 导入 ——

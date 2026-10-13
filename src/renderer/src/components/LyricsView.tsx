@@ -6,6 +6,13 @@ import { usePlayerStore } from '@renderer/store/player-store'
 import { findCurrentLineIndex, parseLyric } from '@renderer/lyrics/lyrics-parser'
 import { Button, Modal, Spinner, toast } from './ui'
 
+const SOURCE_LABELS: Record<string, string> = {
+  netease: '网易云',
+  qq: 'QQ音乐',
+  kugou: '酷狗',
+  manual: '手动粘贴',
+}
+
 export function LyricsView() {
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const position = usePlayerStore((s) => s.position)
@@ -19,6 +26,22 @@ export function LyricsView() {
   const [searching, setSearching] = useState(false)
   const lastSentIndex = useRef(-1)
 
+  /** 保存歌词到本地缓存（首次检索/手动切换后落库，下次播放直接复用） */
+  const saveCache = (source: string, raw: LyricFetchResult): void => {
+    if (!currentTrack) return
+    void window.api.lyrics.saveCached({
+      trackId: currentTrack.id,
+      bvid: currentTrack.bvid,
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      source,
+      lrc: raw.lrc,
+      translation: raw.translation,
+      roman: raw.roman,
+      updatedAt: Date.now(),
+    })
+  }
+
   // 切换曲目时自动匹配歌词
   useEffect(() => {
     let cancelled = false
@@ -28,6 +51,21 @@ export function LyricsView() {
     void (async () => {
       setLoading(true)
       try {
+        // 1. 优先读本地缓存（首次检索到后已落库，下次播放直接复用）
+        const cached = await window.api.lyrics.getCached(currentTrack.id)
+        if (cancelled) return
+        if (cached.ok && cached.data?.lrc) {
+          const parsed = parseLyric(cached.data.lrc, {
+            translation: cached.data.translation,
+            roman: cached.data.roman,
+            source: cached.data.source,
+          })
+          if (parsed.lines.length > 0) {
+            setLyricData(parsed)
+            return
+          }
+        }
+        // 2. 缓存未命中：搜索 + 抓取
         const search = await window.api.lyrics.search(currentTrack.title, currentTrack.artist)
         if (cancelled) return
         const candidates = search.ok ? search.data : []
@@ -43,6 +81,8 @@ export function LyricsView() {
           })
           if (parsed.lines.length > 0) {
             setLyricData(parsed)
+            // 3. 首次检索到后保存缓存
+            saveCache(c.source, r.data)
             return
           }
         }
@@ -109,21 +149,30 @@ export function LyricsView() {
       return
     }
     applyRaw(r.data)
+    saveCache(c.source, r.data)
     setSearchOpen(false)
   }
 
   const applyRaw = (raw: LyricFetchResult): void => {
     setLyricData(parseLyric(raw.lrc, { translation: raw.translation, roman: raw.roman, source: raw.source }))
+    saveCache(raw.source, raw)
   }
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/5 px-4 py-2 dark:border-white/10">
-        <span className="text-sm font-medium">歌词</span>
+        <span className="flex items-center gap-2 text-sm">
+          <span className="font-medium">歌词</span>
+          {lyricData && (
+            <span className="text-xs text-[var(--color-text-secondary)]">
+              来源：{SOURCE_LABELS[lyricData.source] ?? lyricData.source}
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => adjustOffset(-0.5)}>偏移 -0.5s</Button>
           <Button variant="ghost" onClick={() => adjustOffset(0.5)}>偏移 +0.5s</Button>
-          <Button variant="secondary" onClick={() => void openSearch()}>搜索</Button>
+          <Button variant="secondary" onClick={() => void openSearch()}>切换来源</Button>
           <Button variant="secondary" onClick={() => setPasteOpen(true)}>粘贴</Button>
         </div>
       </div>

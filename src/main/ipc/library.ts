@@ -2,6 +2,7 @@
 import { IPC, wrap } from '../../shared/ipc'
 import { handleSafe } from './guard'
 import type {
+  LyricCacheEntry,
   PlayHistoryEntry,
   PlaybackProgress,
   PlaylistType,
@@ -63,6 +64,14 @@ export function registerLibraryHandlers({ repositories, appStore }: ServiceDeps)
   )
   handleSafe(IPC.ProgressGet, (_e, payload: { trackId: string }) =>
     wrap(() => repositories.progress.get(payload.trackId)),
+  )
+
+  // —— 歌词缓存 ——
+  handleSafe(IPC.LyricsGetCached, (_e, payload: { trackId: string }) =>
+    wrap(() => repositories.lyricCache.get(payload.trackId)),
+  )
+  handleSafe(IPC.LyricsSaveCached, (_e, payload: { entry: LyricCacheEntry }) =>
+    wrap(() => repositories.lyricCache.save(payload.entry)),
   )
 
   // —— 设置 ——

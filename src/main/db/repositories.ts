@@ -1,5 +1,6 @@
-// 歌单 / 历史 / 进度 的仓储 CRUD（node:sqlite 同步 API）
+// 歌单 / 历史 / 进度 / 歌词缓存 的仓储 CRUD（node:sqlite 同步 API）
 import type {
+  LyricCacheEntry,
   PlayHistoryEntry,
   PlaybackProgress,
   Playlist,
@@ -283,14 +284,82 @@ export class ProgressRepository {
   }
 }
 
+interface LyricCacheRow {
+  track_id: string
+  bvid: string
+  title: string
+  artist: string
+  source: string
+  lrc: string
+  translation: string | null
+  roman: string | null
+  updated_at: number
+}
+
+function rowToLyricCache(r: LyricCacheRow): LyricCacheEntry {
+  return {
+    trackId: r.track_id,
+    bvid: r.bvid,
+    title: r.title,
+    artist: r.artist,
+    source: r.source,
+    lrc: r.lrc,
+    translation: r.translation ?? undefined,
+    roman: r.roman ?? undefined,
+    updatedAt: r.updated_at,
+  }
+}
+
+export class LyricCacheRepository {
+  constructor(private db: Db) {}
+
+  save(entry: LyricCacheEntry): boolean {
+    const info = this.db
+      .prepare(
+        `INSERT INTO lyric_cache (track_id, bvid, title, artist, source, lrc, translation, roman, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(track_id) DO UPDATE SET
+           bvid = excluded.bvid,
+           title = excluded.title,
+           artist = excluded.artist,
+           source = excluded.source,
+           lrc = excluded.lrc,
+           translation = excluded.translation,
+           roman = excluded.roman,
+           updated_at = excluded.updated_at`,
+      )
+      .run(
+        entry.trackId,
+        entry.bvid,
+        entry.title,
+        entry.artist,
+        entry.source,
+        entry.lrc,
+        entry.translation ?? null,
+        entry.roman ?? null,
+        entry.updatedAt,
+      )
+    return Number(info.changes) > 0
+  }
+
+  get(trackId: string): LyricCacheEntry | null {
+    const row = this.db
+      .prepare('SELECT * FROM lyric_cache WHERE track_id = ?')
+      .get(trackId) as LyricCacheRow | undefined
+    return row ? rowToLyricCache(row) : null
+  }
+}
+
 export class Repositories {
   readonly playlists: PlaylistRepository
   readonly history: HistoryRepository
   readonly progress: ProgressRepository
+  readonly lyricCache: LyricCacheRepository
 
   constructor(db: Db = getDb()) {
     this.playlists = new PlaylistRepository(db)
     this.history = new HistoryRepository(db)
     this.progress = new ProgressRepository(db)
+    this.lyricCache = new LyricCacheRepository(db)
   }
 }

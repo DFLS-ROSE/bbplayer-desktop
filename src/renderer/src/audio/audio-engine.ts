@@ -78,7 +78,7 @@ class AudioEngine {
             coverUrl: r.data.coverUrl || resolved.coverUrl,
             duration: r.data.duration || resolved.duration,
           }
-          store.setCurrentTrack(resolved)
+          this.applyResolved(resolved)
         }
       } catch (e) {
         void window.api.log({
@@ -98,7 +98,7 @@ class AudioEngine {
       audioUrl = r.data.audioUrl
       resolved = { ...resolved, audioUrl }
       if (r.data.duration) store.setDuration(r.data.duration)
-      store.setCurrentTrack(resolved)
+      this.applyResolved(resolved)
     }
 
     if (token !== this.restoreToken) return // 期间已被其它播放请求切换
@@ -122,6 +122,18 @@ class AudioEngine {
     await this.audio.play()
     void this.recordHistory(resolved)
     void this.saveSession()
+  }
+
+  /** 应用解析后的曲目：更新 currentTrack 并同步回队列，避免下次点击队列重复解析 */
+  private applyResolved(resolved: Track): void {
+    const s = usePlayerStore.getState()
+    s.setCurrentTrack(resolved)
+    const idx = s.queue.findIndex((t) => t.id === resolved.id)
+    if (idx >= 0) {
+      const q = [...s.queue]
+      q[idx] = resolved
+      s.setQueue(q, s.queueIndex)
+    }
   }
 
   /** 切换播放/暂停：无源时若有当前曲目则直接加载播放；否则按底层真实状态切换并保持 store 同步 */

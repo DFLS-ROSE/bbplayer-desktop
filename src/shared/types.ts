@@ -151,6 +151,19 @@ export interface LyricFetchResult {
   roman?: string
 }
 
+// 歌词缓存条目（首次检索到后落库，下次播放直接复用）
+export interface LyricCacheEntry {
+  trackId: string
+  bvid: string
+  title: string
+  artist: string
+  source: string
+  lrc: string
+  translation?: string
+  roman?: string
+  updatedAt: number
+}
+
 // —— B 站 ——
 export interface VideoPage {
   cid: number

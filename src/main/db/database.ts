@@ -63,5 +63,17 @@ function migrate(d: DatabaseSync): void {
       duration   REAL NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS lyric_cache (
+      track_id    TEXT PRIMARY KEY,
+      bvid        TEXT NOT NULL DEFAULT '',
+      title       TEXT NOT NULL DEFAULT '',
+      artist      TEXT NOT NULL DEFAULT '',
+      source      TEXT NOT NULL,
+      lrc         TEXT NOT NULL,
+      translation TEXT,
+      roman       TEXT,
+      updated_at  INTEGER NOT NULL
+    );
   `)
 }

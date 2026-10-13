@@ -6,6 +6,7 @@ import type {
   FavoriteData,
   ImportResult,
   LyricCandidate,
+  LyricCacheEntry,
   LyricFetchResult,
   LogEntry,
   LyricLine,
@@ -65,6 +66,8 @@ export const IPC = {
   // lyrics
   LyricsSearch: 'lyrics:search',
   LyricsFetch: 'lyrics:fetch',
+  LyricsGetCached: 'lyrics:getCached',
+  LyricsSaveCached: 'lyrics:saveCached',
   // importer
   Import: 'importer:import',
   // window control
@@ -135,6 +138,8 @@ export interface IpcRequestMap {
   [IPC.BiliSubscriptions]: undefined
   [IPC.LyricsSearch]: { title: string; artist?: string }
   [IPC.LyricsFetch]: { source: string; songId: string }
+  [IPC.LyricsGetCached]: { trackId: string }
+  [IPC.LyricsSaveCached]: { entry: LyricCacheEntry }
   [IPC.Import]: { source: 'netease' | 'qq'; url: string }
   [IPC.WindowToggleLyrics]: undefined
   [IPC.LogWrite]: LogEntry
@@ -209,6 +214,8 @@ export interface RendererApi {
   lyrics: {
     search(title: string, artist?: string): Promise<Result<LyricCandidate[]>>
     fetch(source: string, songId: string): Promise<Result<LyricFetchResult>>
+    getCached(trackId: string): Promise<Result<LyricCacheEntry | null>>
+    saveCached(entry: LyricCacheEntry): Promise<Result<boolean>>
   }
   importer: {
     import(source: 'netease' | 'qq', url: string): Promise<Result<ImportResult>>

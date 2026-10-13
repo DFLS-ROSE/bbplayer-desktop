@@ -30,7 +30,7 @@ export function SettingsPage() {
           {BUILTIN_THEMES.map((t) => (
             <button
               key={t.id}
-              onClick={() => void update({ themeId: t.id })}
+              onClick={() => void update({ themeId: t.id, accentColor: t.accent })}
               className={`flex w-28 flex-col items-center gap-2 rounded-xl border p-3 transition ${
                 settings.themeId === t.id
                   ? 'border-[var(--color-accent)]'

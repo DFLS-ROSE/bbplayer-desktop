@@ -1,6 +1,6 @@
 {
   "name": "bbplayer-desktop",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "description": "B 站音频播放器桌面端（Windows / macOS / Linux）",
   "main": "./out/main/index.js",
   "author": "BBPlayer",

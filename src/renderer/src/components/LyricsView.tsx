@@ -246,8 +246,8 @@ function LyricLineRow({
       ref={lineRef}
       className={`transition-all duration-500 ${
         active
-          ? 'text-lg font-semibold text-[var(--color-accent)]'
-          : 'text-sm text-[var(--color-text-secondary)] opacity-55'
+          ? 'font-semibold text-[var(--color-accent)] text-[clamp(1rem,2.4vh,1.5rem)]'
+          : 'text-[var(--color-text-secondary)] opacity-55 text-[clamp(0.8rem,2vh,1.2rem)]'
       }`}
     >
       <div>{line.text || '♪'}</div>

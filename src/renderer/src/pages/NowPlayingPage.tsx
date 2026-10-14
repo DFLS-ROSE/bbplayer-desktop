@@ -40,7 +40,7 @@ export function NowPlayingPage() {
     )
 
   return (
-    <div className="relative flex h-full overflow-hidden">
+    <div className="relative flex h-full min-h-0 overflow-hidden">
       {/* 背景：模糊放大的封面 + 渐变遮罩 */}
       {track?.coverUrl && (
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
@@ -57,7 +57,8 @@ export function NowPlayingPage() {
       {/* 前景 */}
       <div className="relative z-10 flex h-full w-full">
         {/* 左：封面 + 信息 + 控制 */}
-        <div className="flex w-[44%] min-w-[320px] shrink-0 flex-col items-center justify-center gap-4 overflow-y-auto overflow-x-hidden p-6">
+        <div className="flex w-[44%] min-w-[320px] shrink-0 flex-col overflow-y-auto overflow-x-hidden p-6">
+          <div className="m-auto flex w-full flex-col items-center gap-4">
           {track?.coverUrl ? (
             <img
               src={track.coverUrl}
@@ -135,6 +136,7 @@ export function NowPlayingPage() {
                 <IconLoudness size={18} />
               </button>
             </div>
+          </div>
           </div>
         </div>
 

@@ -32,6 +32,8 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
+  # 覆盖安装完成后自动启动应用（静默 /S 时 runAfterFinish 不生效，走自定义脚本）
+  include: resources/installer.nsh
   # 卸载时删除应用数据目录（%APPDATA%\BBPlayer：settings.json / bbplayer.db / 日志）
   deleteAppDataOnUninstall: true
 

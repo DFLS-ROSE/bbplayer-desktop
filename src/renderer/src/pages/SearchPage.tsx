@@ -62,7 +62,7 @@ export function SearchPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
+    <div className="mx-auto h-full max-w-4xl overflow-y-auto overflow-x-hidden px-6 py-8">
       <SearchBar onSearch={(v) => void handleSearch(v)} />
 
       <div className="mt-5 flex gap-1 border-b border-black/5 dark:border-white/10">

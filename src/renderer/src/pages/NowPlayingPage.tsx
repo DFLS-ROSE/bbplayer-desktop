@@ -40,25 +40,23 @@ export function NowPlayingPage() {
     )
 
   return (
-    <div className="relative flex h-full min-h-0 overflow-hidden">
-      {/* 背景：模糊放大的封面 + 渐变遮罩 */}
+    <div className="relative flex h-full min-h-0">
+      {/* 背景：模糊放大的封面 + 渐变遮罩（仅装饰，不参与布局） */}
       {track?.coverUrl && (
-        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
           <img
             src={track.coverUrl}
             alt=""
             className="h-full w-full scale-125 object-cover blur-3xl"
             style={{ opacity: 0.35 }}
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[var(--color-bg)]/55 to-[var(--color-bg)]/92" />
+          <div className="absolute inset-0 bg-[var(--color-bg)]/70" />
         </div>
       )}
 
-      {/* 前景 */}
-      <div className="relative z-10 flex h-full w-full">
-        {/* 左：封面 + 信息 + 控制 */}
-        <div className="flex w-[44%] min-w-[320px] shrink-0 flex-col overflow-y-auto overflow-x-hidden p-6">
-          <div className="m-auto flex w-full flex-col items-center gap-4">
+      {/* 左：封面 + 信息 + 控制（自身滚动，内容用 margin 垂直居中，空间不足时自动退化为顶部对齐） */}
+      <div className="relative z-10 flex w-[44%] min-w-[320px] shrink-0 flex-col overflow-y-auto overflow-x-hidden p-6">
+        <div className="my-auto flex flex-col items-center gap-4">
           {track?.coverUrl ? (
             <img
               src={track.coverUrl}
@@ -94,7 +92,7 @@ export function NowPlayingPage() {
               <span className="shrink-0">{formatTime(duration || track?.duration || 0)}</span>
             </div>
 
-            <div className="mt-4 flex items-center justify-center gap-2 sm:gap-3">
+            <div className="mt-4 flex items-center justify-center gap-2">
               <button
                 onClick={cycleMode}
                 title="播放模式"
@@ -137,13 +135,12 @@ export function NowPlayingPage() {
               </button>
             </div>
           </div>
-          </div>
         </div>
+      </div>
 
-        {/* 右：歌词 */}
-        <div className="min-w-0 flex-1">
-          <LyricsView />
-        </div>
+      {/* 右：歌词 */}
+      <div className="relative z-10 min-w-0 flex-1 border-l border-black/5 dark:border-white/10">
+        <LyricsView />
       </div>
     </div>
   )

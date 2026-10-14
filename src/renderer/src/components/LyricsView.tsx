@@ -179,7 +179,7 @@ export function LyricsView() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-black/5 px-4 py-2 dark:border-white/10">
         <span className="flex min-w-0 items-center gap-2 text-sm">
           <span className="shrink-0 font-medium">歌词</span>
@@ -205,7 +205,7 @@ export function LyricsView() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
         {loading ? (
           <div className="flex justify-center py-10">
             <Spinner />

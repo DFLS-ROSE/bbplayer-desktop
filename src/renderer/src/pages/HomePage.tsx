@@ -20,7 +20,7 @@ export function HomePage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
+    <div className="mx-auto h-full max-w-4xl overflow-y-auto overflow-x-hidden px-6 py-8">
       <section className="mb-8 rounded-2xl bg-gradient-to-r from-[var(--color-accent)] to-pink-400 p-8 text-white">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold">音乐趣事</h1>

@@ -145,10 +145,11 @@ export async function downloadAndInstall(tag: string): Promise<void> {
   logInfo('updater', '更新已下载，开始静默安装', { traceId: createTraceId(), tag, tmpPath })
   push({ state: 'downloaded', version: tag })
 
-  // NSIS 静默覆盖安装（/S），detached 不阻塞退出
+  // NSIS 静默覆盖安装（/S），detached 不阻塞退出；随后退出旧应用，安装器完成覆盖后自启动新应用
   try {
     const child = spawn(tmpPath, ['/S'], { detached: true, stdio: 'ignore' })
     child.unref()
+    setTimeout(() => app.quit(), 800)
   } catch (e) {
     logError('updater', '启动安装程序失败', {
       traceId: createTraceId(),

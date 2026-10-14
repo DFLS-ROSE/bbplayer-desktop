@@ -23,7 +23,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className="mx-auto h-full max-w-3xl overflow-y-auto overflow-x-hidden px-6 py-8">
       <h1 className="mb-6 text-xl font-bold">设置</h1>
 
       <Section title="主题">

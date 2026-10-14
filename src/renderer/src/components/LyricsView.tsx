@@ -189,11 +189,19 @@ export function LyricsView() {
             </span>
           )}
         </span>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          <Button variant="ghost" onClick={() => adjustOffset(-0.5)}>偏移 -0.5s</Button>
-          <Button variant="ghost" onClick={() => adjustOffset(0.5)}>偏移 +0.5s</Button>
-          <Button variant="secondary" onClick={() => void openSearch()}>切换来源</Button>
-          <Button variant="secondary" onClick={() => setPasteOpen(true)}>粘贴</Button>
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Button variant="ghost" className="px-2.5!" title="歌词整体偏移 -0.5 秒" onClick={() => adjustOffset(-0.5)}>
+            -0.5s
+          </Button>
+          <Button variant="ghost" className="px-2.5!" title="歌词整体偏移 +0.5 秒" onClick={() => adjustOffset(0.5)}>
+            +0.5s
+          </Button>
+          <Button variant="secondary" className="px-2.5!" onClick={() => void openSearch()}>
+            切换来源
+          </Button>
+          <Button variant="secondary" className="px-2.5!" onClick={() => setPasteOpen(true)}>
+            粘贴
+          </Button>
         </div>
       </div>
 

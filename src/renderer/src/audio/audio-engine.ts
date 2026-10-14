@@ -1,5 +1,6 @@
 // HTML5 Audio 播放引擎 + Web Audio 响度均衡 + 断点续播 + 历史/会话持久化
 import { usePlayerStore } from '@renderer/store/player-store'
+import { useSettingsStore } from '@renderer/store/settings-store'
 import type { SessionContext, Track } from '@shared/types'
 
 type AudioCtor = typeof AudioContext
@@ -12,6 +13,7 @@ class AudioEngine {
   private compressor: DynamicsCompressorNode | null = null
   private gainNode: GainNode | null = null
   private restoreToken = 0
+  private volumeSaveTimer: number | null = null
   private lastProgressSaveAt = 0
   private lastSessionSaveAt = 0
 
@@ -227,6 +229,11 @@ class AudioEngine {
       this.audio.volume = clamped
     }
     usePlayerStore.getState().setVolume(clamped)
+    // 防抖持久化音量，避免拖动时频繁写盘
+    if (this.volumeSaveTimer != null) window.clearTimeout(this.volumeSaveTimer)
+    this.volumeSaveTimer = window.setTimeout(() => {
+      void useSettingsStore.getState().update({ volume: clamped })
+    }, 300)
   }
 
   setLoudness(on: boolean): void {

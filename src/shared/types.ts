@@ -88,6 +88,7 @@ export interface Settings {
   language: string // 'zh-CN' | 'en-US'
   privacyAccepted: boolean
   enableTelemetry: boolean // Sentry 崩溃上报开关（默认关闭）
+  volume: number // 播放音量 0..1
   lyricOverlay: LyricOverlaySettings
   hotkeys: Record<string, string> // P2 自定义快捷键
 }

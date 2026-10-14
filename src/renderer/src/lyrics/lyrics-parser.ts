@@ -16,6 +16,9 @@ export function parseLyric(raw: string, opts: ParseLyricOptions = {}): LyricData
   const romanMap = parseTaggedLines(opts.roman)
   const hasWordTags = /<[^>]*\d{1,3}:\d{1,2}[^>]*>/.test(raw)
   const type = hasWordTags ? 'spl' : 'lrc'
+  // 歌词全局时间偏移（酷狗等 [offset:毫秒] 元数据），换算为秒统一叠加到每个时间标签
+  const offsetMatch = raw.match(/\[offset:\s*(-?\d+)\s*\]/i)
+  const metaOffset = offsetMatch ? Number(offsetMatch[1]) / 1000 : 0
 
   const lines: LyricLine[] = []
   for (const rawLine of raw.split(/\r?\n/)) {
@@ -29,7 +32,7 @@ export function parseLyric(raw: string, opts: ParseLyricOptions = {}): LyricData
     const words = parseWords(content)
     if (words && words.length > 0) content = words.map((w) => w.text).join('')
 
-    const baseTime = tagToSec(timeTags[0][0])
+    const baseTime = tagToSec(timeTags[0][0]) + metaOffset
     const lineObj: LyricLine = {
       time: baseTime,
       text: content,
@@ -41,7 +44,7 @@ export function parseLyric(raw: string, opts: ParseLyricOptions = {}): LyricData
 
     // 一行多时间标签：为后续标签复制该行
     for (let i = 1; i < timeTags.length; i++) {
-      lines.push({ ...lineObj, time: tagToSec(timeTags[i][0]) })
+      lines.push({ ...lineObj, time: tagToSec(timeTags[i][0]) + metaOffset })
     }
   }
 

@@ -100,8 +100,9 @@ export function Button(props: {
   disabled?: boolean
   className?: string
   type?: 'button' | 'submit'
+  title?: string
 }) {
-  const { children, onClick, variant = 'primary', disabled, className = '', type = 'button' } = props
+  const { children, onClick, variant = 'primary', disabled, className = '', type = 'button', title } = props
   const base =
     'inline-flex items-center justify-center gap-1 rounded-full px-4 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50'
   const variants: Record<string, string> = {
@@ -112,7 +113,7 @@ export function Button(props: {
     danger: 'bg-red-500 text-white hover:bg-red-600',
   }
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`}>
+    <button type={type} onClick={onClick} disabled={disabled} title={title} className={`${base} ${variants[variant]} ${className}`}>
       {children}
     </button>
   )

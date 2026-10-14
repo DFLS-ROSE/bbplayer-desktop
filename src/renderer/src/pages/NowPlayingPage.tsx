@@ -57,7 +57,7 @@ export function NowPlayingPage() {
       {/* 前景 */}
       <div className="relative z-10 flex h-full w-full">
         {/* 左：封面 + 信息 + 控制 */}
-        <div className="flex w-[40%] min-w-[220px] shrink-0 flex-col items-center justify-center gap-4 overflow-y-auto overflow-x-hidden p-6">
+        <div className="flex w-[44%] min-w-[320px] shrink-0 flex-col items-center justify-center gap-4 overflow-y-auto overflow-x-hidden p-6">
           {track?.coverUrl ? (
             <img
               src={track.coverUrl}

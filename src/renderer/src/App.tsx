@@ -47,6 +47,12 @@ function Root() {
     void loadSettings()
   }, [loadSettings])
 
+  // 启动时从设置恢复音量
+  useEffect(() => {
+    if (!settingsLoaded) return
+    engine.setVolume(settings.volume)
+  }, [settingsLoaded])
+
   useEffect(() => {
     applyTheme(getTheme(settings.themeId), settings.accentColor)
   }, [settings.themeId, settings.accentColor])

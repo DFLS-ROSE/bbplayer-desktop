@@ -42,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'zh-CN',
   privacyAccepted: false,
   enableTelemetry: false,
+  volume: 0.8,
   lyricOverlay: {
     alwaysOnTop: true,
     opacity: 1,

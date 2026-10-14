@@ -3,7 +3,7 @@
 // GitHub Releases 公开匿名可访问/下载，代码内无需内置令牌。
 // 检查稳定版 / 列出所有版本（含测试版）/ 下载并覆盖安装
 // ============================================================================
-import { app } from 'electron'
+import { app, net } from 'electron'
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { join } from 'node:path'
@@ -41,14 +41,15 @@ async function fetchReleases(): Promise<GithubRelease[]> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
   try {
-    const res = await fetch(`${GITHUB_API}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=100`, {
+    // 用 Electron net.fetch（Chromium 网络栈，遵循系统代理），避免 Node 原生 fetch 直连被墙
+    const res = await net.fetch(`${GITHUB_API}/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=100`, {
       headers: { 'User-Agent': UA, Accept: 'application/vnd.github+json' },
       signal: controller.signal,
     })
     if (!res.ok) throw new Error(`GitHub 接口 HTTP ${res.status}`)
     return (await res.json()) as GithubRelease[]
   } catch (e) {
-    if (controller.signal.aborted) throw new Error('检查更新超时：无法访问 GitHub（网络受限或需代理）')
+    if (controller.signal.aborted) throw new Error('检查更新超时：无法访问 GitHub（请检查网络或代理）')
     throw e
   } finally {
     clearTimeout(timer)
@@ -118,7 +119,7 @@ export async function downloadAndInstall(tag: string): Promise<void> {
   logInfo('updater', '开始下载更新', { traceId: createTraceId(), tag, size: exe.size })
   push({ state: 'downloading', percent: 0 })
 
-  const res = await fetch(exe.browser_download_url, {
+  const res = await net.fetch(exe.browser_download_url, {
     headers: { 'User-Agent': UA },
     redirect: 'follow',
   })

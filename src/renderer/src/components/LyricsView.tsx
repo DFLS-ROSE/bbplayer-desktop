@@ -25,17 +25,25 @@ export function LyricsView() {
   const [candidates, setCandidates] = useState<LyricCandidate[]>([])
   const [searching, setSearching] = useState(false)
   const lastSentIndex = useRef(-1)
+  const rawLrcRef = useRef<LyricFetchResult | null>(null)
 
-  /** 保存歌词到本地缓存（首次检索/手动切换后落库，下次播放直接复用） */
-  const saveCache = (source: string, raw: LyricFetchResult): void => {
+  /** 保存歌词到本地缓存（首次检索/手动切换后落库，下次播放直接复用）；offsetSec 会写入 [offset:] 标签持久化 */
+  const saveCache = (source: string, raw: LyricFetchResult, offsetSec = 0): void => {
     if (!currentTrack) return
+    let lrc = raw.lrc
+    if (offsetSec !== 0) {
+      const offsetMs = Math.round(offsetSec * 1000)
+      lrc = /\[offset:/i.test(lrc)
+        ? lrc.replace(/\[offset:\s*-?\d+\s*\]/i, `[offset:${offsetMs}]`)
+        : `[offset:${offsetMs}]\n${lrc}`
+    }
     void window.api.lyrics.saveCached({
       trackId: currentTrack.id,
       bvid: currentTrack.bvid,
       title: currentTrack.title,
       artist: currentTrack.artist,
       source,
-      lrc: raw.lrc,
+      lrc,
       translation: raw.translation,
       roman: raw.roman,
       updatedAt: Date.now(),
@@ -55,14 +63,23 @@ export function LyricsView() {
         const cached = await window.api.lyrics.getCached(currentTrack.id)
         if (cancelled) return
         if (cached.ok && cached.data?.lrc) {
-          const parsed = parseLyric(cached.data.lrc, {
-            translation: cached.data.translation,
-            roman: cached.data.roman,
-            source: cached.data.source,
-          })
-          if (parsed.lines.length > 0) {
-            setLyricData(parsed)
-            return
+          // 缓存歌词同样校验歌名，旧版本缓存的错误歌词不再复用
+          if (lyricMatchesTrack(cached.data.lrc, currentTrack.title, currentTrack.artist)) {
+            const parsed = parseLyric(cached.data.lrc, {
+              translation: cached.data.translation,
+              roman: cached.data.roman,
+              source: cached.data.source,
+            })
+            if (parsed.lines.length > 0) {
+              rawLrcRef.current = {
+                lrc: cached.data.lrc,
+                translation: cached.data.translation,
+                roman: cached.data.roman,
+                source: cached.data.source,
+              }
+              setLyricData(parsed)
+              return
+            }
           }
         }
         // 2. 缓存未命中：搜索 + 抓取
@@ -75,13 +92,14 @@ export function LyricsView() {
           if (cancelled) return
           if (!r.ok) continue
           // 校验歌词本体歌名与实际曲目一致，防止串到别的歌
-          if (!lyricMatchesTrack(r.data.lrc, currentTrack.title)) continue
+          if (!lyricMatchesTrack(r.data.lrc, currentTrack.title, currentTrack.artist)) continue
           const parsed = parseLyric(r.data.lrc, {
             translation: r.data.translation,
             roman: r.data.roman,
             source: c.source,
           })
           if (parsed.lines.length > 0) {
+            rawLrcRef.current = r.data
             setLyricData(parsed)
             // 3. 首次检索到后保存缓存
             saveCache(c.source, r.data)
@@ -134,7 +152,13 @@ export function LyricsView() {
     return <div className="py-10 text-center text-sm text-[var(--color-text-secondary)]">请先播放歌曲</div>
   }
 
-  const adjustOffset = (delta: number): void => setOffset((o) => o + delta)
+  const adjustOffset = (delta: number): void => {
+    const newOffset = offset + delta
+    setOffset(newOffset)
+    // 偏移调整后写回缓存，下次播放同一首歌自动应用
+    const raw = rawLrcRef.current
+    if (raw) saveCache(raw.source, raw, newOffset)
+  }
 
   const openSearch = async (): Promise<void> => {
     setSearchOpen(true)
@@ -156,26 +180,45 @@ export function LyricsView() {
   }
 
   const applyRaw = (raw: LyricFetchResult): void => {
+    rawLrcRef.current = raw
     setLyricData(parseLyric(raw.lrc, { translation: raw.translation, roman: raw.roman, source: raw.source }))
     saveCache(raw.source, raw)
   }
 
-  /** 校验歌词元数据 [ti:]（歌名）与目标标题是否匹配，避免自动匹配串到同名/翻唱的歌 */
-  const lyricMatchesTrack = (lrc: string, title: string): boolean => {
+  /** 校验歌词元数据 [ti:]（歌名）/ [ar:]（歌手）与目标是否匹配，避免串到同名/翻唱的歌 */
+  const lyricMatchesTrack = (lrc: string, title: string, artist?: string): boolean => {
     const ti = lrc.match(/\[ti:([^\]]+)\]/i)?.[1]
-    if (!ti) return true // 无 [ti:] 标签时放行
+    const ar = lrc.match(/\[ar:([^\]]+)\]/i)?.[1]
     const norm = (s: string): string =>
       s.toLowerCase().replace(/[\s\-—–|/·_,、，。.!！?？"'《》「」【】()（）[\]{}]/g, '')
     const clean = (s: string): string =>
       s.replace(/[-—–|/].*$/, '').replace(/[（(【\[〔].*?[）)】\]〕]/g, '').trim()
-    const a = norm(clean(ti))
-    const b = norm(clean(title))
-    if (!a || !b) return true
-    if (a === b || a.includes(b) || b.includes(a)) return true
-    const set = new Set(a)
-    let common = 0
-    for (const ch of b) if (set.has(ch)) common++
-    return common / Math.max(a.length, b.length) > 0.55
+    const overlap = (a: string, b: string): number => {
+      if (!a || !b) return 0
+      const set = new Set(a)
+      let common = 0
+      for (const ch of b) if (set.has(ch)) common++
+      return common / Math.max(a.length, b.length)
+    }
+
+    // 歌名校验（有 [ti:] 时）：歌名明显不匹配则拒绝
+    if (ti) {
+      const a = norm(clean(ti))
+      const b = norm(clean(title))
+      if (a && b) {
+        const matched = a === b || a.includes(b) || b.includes(a) || overlap(a, b) > 0.55
+        if (!matched) return false
+      }
+    }
+
+    // 歌手校验（有 [ar:] 时）：目标标题或歌手名里完全不含歌词歌手名，且歌名仅是模糊匹配时，视为串歌拒绝
+    if (ar && !ti) {
+      const a = norm(clean(ar))
+      const target = norm(`${title} ${artist ?? ''}`)
+      if (a && target && !target.includes(a)) return false
+    }
+
+    return true
   }
 
   return (

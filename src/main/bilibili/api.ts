@@ -1,5 +1,6 @@
 // B 站各 API 函数：搜索 / 视频信息 / 播放地址 / 收藏夹 / 订阅合集
 import { BILI_API_BASE, BILI_PASSPORT_BASE } from '../../shared/constants'
+import { pickAudioTrack, type AudioQualityPref, type AudioTrackLike } from '../../shared/audio-quality'
 import type {
   FavoriteData,
   FavoriteFolder,
@@ -41,13 +42,7 @@ interface SearchResponse {
 
 interface PlayUrlResponse {
   dash?: {
-    audio?: {
-      baseUrl?: string
-      base_url?: string
-      /** 备用节点：B 站会同时下发多个 CDN 地址，mcdn 等 P2P 边缘节点不稳定时用得上 */
-      backupUrl?: string[]
-      backup_url?: string[]
-    }[]
+    audio?: AudioTrackLike[]
     duration?: number
   }
   durl?: { url?: string; backup_url?: string[]; length?: number }[]
@@ -158,18 +153,34 @@ export class BiliApi {
     return { items, total, hasMore: page * 20 < total }
   }
 
-  async getPlayUrl(bvid: string, cid: number): Promise<PlayUrlResult> {
+  async getPlayUrl(
+    bvid: string,
+    cid: number,
+    quality: AudioQualityPref = 'auto',
+  ): Promise<PlayUrlResult> {
     await this.ready()
     const traceId = createTraceId()
-    logDebug('bili.api', '获取播放地址', { traceId, bvid, cid })
+    logDebug('bili.api', '获取播放地址', { traceId, bvid, cid, quality })
     const data = await this.http.get<PlayUrlResponse>(
       `${BILI_API_BASE}/x/player/playurl`,
       { bvid, cid, fnval: 16, fnver: 0, fourk: 1 },
       { wbi: true },
     )
-    const audio = data?.dash?.audio?.[0]
+
+    // 按用户偏好挑音轨（只认可解码的 AAC），拿不到再退回 durl
+    const picked = pickAudioTrack(data?.dash?.audio, quality)
+    const audio = picked?.track
     const audioUrl = audio?.baseUrl || audio?.base_url || data?.durl?.[0]?.url
     if (!audioUrl) throw new Error('未获取到可播放的音频流（可能需要登录或该视频无音频轨）')
+    if (picked) {
+      logDebug('bili.api', '已选音轨', {
+        traceId,
+        quality,
+        picked: picked.label,
+        bandwidth: picked.bandwidth,
+        candidates: data?.dash?.audio?.length ?? 0,
+      })
+    }
 
     // 备用地址：B 站会同时给多个 CDN 节点（mcdn P2P 边缘节点经常 503/403），
     // 只取第一个时节点一抖就整首放不出来，所以把备用地址一并交给渲染层做失败切换。
@@ -184,7 +195,13 @@ export class BiliApi {
     }
 
     const duration = data?.dash?.duration ?? data?.durl?.[0]?.length ?? data?.timelength ?? 0
-    return { audioUrl, backupUrls, duration }
+    return {
+      audioUrl,
+      backupUrls,
+      duration,
+      audioLabel: picked?.label,
+      audioBandwidth: picked?.bandwidth,
+    }
   }
 
   async resolve(input: string): Promise<{ bvid: string } | null> {

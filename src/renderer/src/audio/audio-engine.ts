@@ -104,6 +104,7 @@ class AudioEngine {
           if (sources.length > 0) {
             this.sources = sources
             this.sourceIndex = 0
+            store.setAudioLabel(r.data.audioLabel ?? '')
             void window.api.log({
               level: 'info',
               scope: 'audio',
@@ -209,6 +210,7 @@ class AudioEngine {
       sources = buildSourceList(r.data.audioUrl, r.data.backupUrls)
       resolved = { ...resolved, audioUrl: r.data.audioUrl }
       if (r.data.duration) store.setDuration(r.data.duration)
+      store.setAudioLabel(r.data.audioLabel ?? '')
       this.applyResolved(resolved)
     }
 
@@ -341,6 +343,37 @@ class AudioEngine {
         message: '播放失败',
         extra: { error: e instanceof Error ? e.message : String(e) },
       })
+    }
+  }
+
+  /**
+   * 重新取一次当前曲目的播放地址并就地换源（切换音质后立即生效）。
+   * 保留播放位置；播放中会继续播，失败则由备用地址切换与错误提示兜底。
+   */
+  async reloadSource(): Promise<void> {
+    const store = usePlayerStore.getState()
+    const track = store.currentTrack
+    if (!track || !this.audio.src) return
+    const wasPlaying = !this.audio.paused
+    this.resumeAt = Number.isFinite(this.audio.currentTime) ? this.audio.currentTime : 0
+
+    const r = await window.api.bili.playUrl(track.bvid, track.cid)
+    if (!r.ok) return
+    const sources = buildSourceList(r.data.audioUrl, r.data.backupUrls)
+    if (sources.length === 0) return
+
+    this.sources = sources
+    this.sourceIndex = 0
+    this.refetchedUrls = false
+    this.failedCompletely = false
+    store.setAudioLabel(r.data.audioLabel ?? '')
+    this.applySource()
+    if (wasPlaying) {
+      try {
+        await this.audio.play()
+      } catch {
+        /* 失败会触发 error 事件，走备用地址切换 */
+      }
     }
   }
 

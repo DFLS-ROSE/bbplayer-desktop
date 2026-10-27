@@ -12,6 +12,8 @@ interface PlayerStore {
   duration: number
   volume: number
   loudness: boolean
+  /** 当前实际拿到的音质档位展示名（如 192K），空串表示未知 */
+  audioLabel: string
 
   setCurrentTrack: (t: Track | null) => void
   setQueue: (queue: Track[], queueIndex: number) => void
@@ -21,6 +23,7 @@ interface PlayerStore {
   setDuration: (duration: number) => void
   setVolume: (volume: number) => void
   setLoudness: (loudness: boolean) => void
+  setAudioLabel: (audioLabel: string) => void
   removeFromQueue: (index: number) => void
   moveInQueue: (index: number, dir: 1 | -1) => void
   clearQueue: () => void
@@ -37,6 +40,7 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
   duration: 0,
   volume: 0.8,
   loudness: false,
+  audioLabel: '',
 
   setCurrentTrack: (currentTrack) => set({ currentTrack }),
   setQueue: (queue, queueIndex) => set({ queue, queueIndex }),
@@ -46,6 +50,7 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
   setDuration: (duration) => set({ duration }),
   setVolume: (volume) => set({ volume }),
   setLoudness: (loudness) => set({ loudness }),
+  setAudioLabel: (audioLabel) => set({ audioLabel }),
 
   removeFromQueue: (index) =>
     set((s) => {
@@ -80,5 +85,6 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
       isPlaying: false,
       position: 0,
       duration: 0,
+      audioLabel: '',
     }),
 }))

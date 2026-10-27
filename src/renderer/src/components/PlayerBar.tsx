@@ -34,6 +34,7 @@ export function PlayerBar() {
   const volume = usePlayerStore((s) => s.volume)
   const loudness = usePlayerStore((s) => s.loudness)
   const mode = usePlayerStore((s) => s.mode)
+  const audioLabel = usePlayerStore((s) => s.audioLabel)
 
   const cycleMode = (): void => {
     const idx = MODE_ORDER.indexOf(mode)
@@ -114,6 +115,14 @@ export function PlayerBar() {
 
         {/* 右侧 */}
         <div className="flex shrink-0 items-center gap-1">
+          {audioLabel && (
+            <span
+              className="mr-1 hidden shrink-0 rounded-md border border-black/10 px-1.5 py-0.5 text-[11px] tabular-nums text-[var(--color-text-secondary)] sm:inline dark:border-white/15"
+              title={`当前音质 ${audioLabel}（可在设置里调整）`}
+            >
+              {audioLabel}
+            </span>
+          )}
           <div className="hidden items-center gap-1 lg:flex">
             <span className="text-xs text-[var(--color-text-secondary)]">音量</span>
             <input

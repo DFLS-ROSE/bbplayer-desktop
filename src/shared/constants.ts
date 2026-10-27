@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   privacyAccepted: false,
   enableTelemetry: false,
   volume: 0.8,
+  audioQuality: 'auto',
   lyricOverlay: {
     alwaysOnTop: true,
     opacity: 1,

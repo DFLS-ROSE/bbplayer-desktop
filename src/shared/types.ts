@@ -1,6 +1,9 @@
 // ============================================================================
 // BBPlayer Desktop —— 领域类型定义（主进程 / 渲染进程共享）
 // ============================================================================
+import type { AudioQualityPref } from './audio-quality'
+
+export type { AudioQualityPref }
 
 // —— 播放模式 ——
 export type PlayMode = 'sequence' | 'loop-one' | 'loop-all' | 'shuffle'
@@ -89,6 +92,7 @@ export interface Settings {
   privacyAccepted: boolean
   enableTelemetry: boolean // Sentry 崩溃上报开关（默认关闭）
   volume: number // 播放音量 0..1
+  audioQuality: AudioQualityPref // 音质偏好：auto / high / medium / low
   lyricOverlay: LyricOverlaySettings
   hotkeys: Record<string, string> // P2 自定义快捷键
 }
@@ -228,6 +232,10 @@ export interface PlayUrlResult {
   /** 同一音频的备用 CDN 地址（节点失败时依次切换） */
   backupUrls: string[]
   duration: number
+  /** 实际拿到的音质档位展示名，如 192K；取不到时为 undefined */
+  audioLabel?: string
+  /** 实际码率 bps */
+  audioBandwidth?: number
 }
 
 // —— 导入 ——

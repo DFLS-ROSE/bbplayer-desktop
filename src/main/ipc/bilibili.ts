@@ -3,7 +3,13 @@ import { IPC, wrap } from '../../shared/ipc'
 import { handleSafe } from './guard'
 import type { ServiceDeps } from './index'
 
-export function registerBilibiliHandlers({ api, auth, lyricsService, importers }: ServiceDeps): void {
+export function registerBilibiliHandlers({
+  api,
+  auth,
+  lyricsService,
+  importers,
+  appStore,
+}: ServiceDeps): void {
   handleSafe(IPC.BiliGetVideo, (_e, payload: { bvid: string }) =>
     wrap(() => api.getVideoInfo(payload.bvid)),
   )
@@ -11,7 +17,8 @@ export function registerBilibiliHandlers({ api, auth, lyricsService, importers }
     wrap(() => api.search(payload.keyword, payload.page ?? 1)),
   )
   handleSafe(IPC.BiliPlayUrl, (_e, payload: { bvid: string; cid: number }) =>
-    wrap(() => api.getPlayUrl(payload.bvid, payload.cid)),
+    // 音质偏好由主进程从设置里读，渲染层不必每次都传
+    wrap(() => api.getPlayUrl(payload.bvid, payload.cid, appStore.getSettings().audioQuality)),
   )
   handleSafe(IPC.BiliResolve, (_e, payload: { input: string }) =>
     wrap(() => api.resolve(payload.input)),

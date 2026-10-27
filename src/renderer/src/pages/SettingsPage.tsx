@@ -3,8 +3,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useSettingsStore } from '@renderer/store/settings-store'
+import { usePlayerStore } from '@renderer/store/player-store'
+import { engine } from '@renderer/audio/audio-engine'
 import { BUILTIN_THEMES } from '@renderer/theme/themes'
 import { toast } from '@renderer/components/ui'
+import { AUDIO_QUALITY_OPTIONS, type AudioQualityPref } from '@shared/audio-quality'
 import { formatOffset } from '@shared/lyrics-offset'
 import i18n, { SUPPORTED_LANGUAGES } from '@renderer/i18n'
 import type { LyricOffsetEntry, ReleaseInfo, StableUpdateResult, UpdateStatus } from '@shared/types'
@@ -30,6 +33,19 @@ export function SettingsPage() {
   const setLanguage = (language: string): void => {
     void i18n.changeLanguage(language)
     void update({ language })
+  }
+
+  const audioLabel = usePlayerStore((s) => s.audioLabel)
+
+  /** 切换音质：保存偏好 → 重新取流并就地换源 → 用实际拿到的档位反馈 */
+  const changeQuality = (value: AudioQualityPref): void => {
+    void (async () => {
+      await update({ audioQuality: value })
+      await engine.reloadSource()
+      const label = usePlayerStore.getState().audioLabel
+      const name = AUDIO_QUALITY_OPTIONS.find((o) => o.value === value)?.label ?? value
+      toast(label ? `音质已切换：${label}` : `音质偏好已保存：${name}（下一首生效）`, 'success')
+    })()
   }
 
   return (
@@ -75,6 +91,30 @@ export function SettingsPage() {
           checked={settings.autoPlayOnLaunch}
           onChange={(v) => void update({ autoPlayOnLaunch: v })}
         />
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 py-1.5 text-sm">
+          <span>音质</span>
+          <div className="flex gap-1.5">
+            {AUDIO_QUALITY_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                title={o.hint}
+                onClick={() => changeQuality(o.value)}
+                className={`rounded-full px-3 py-1 text-xs transition ${
+                  settings.audioQuality === o.value
+                    ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
+                    : 'bg-black/5 text-[var(--color-text-secondary)] dark:bg-white/10'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-xs text-[var(--color-text-secondary)]">
+          {AUDIO_QUALITY_OPTIONS.find((o) => o.value === settings.audioQuality)?.hint ?? ''}
+          {audioLabel && `　当前播放：${audioLabel}`}
+        </p>
       </Section>
 
       <Section title="桌面歌词">

@@ -165,6 +165,16 @@ export interface LyricCacheEntry {
   updatedAt: number
 }
 
+// 歌词偏移记录（按 BV 号记忆，同一视频不同分P共用）
+export interface LyricOffsetEntry {
+  bvid: string
+  title: string
+  offsetMs: number
+  updatedAt: number
+  /** 累计调整次数（来自调整日志） */
+  changeCount: number
+}
+
 // —— B 站 ——
 export interface VideoPage {
   cid: number

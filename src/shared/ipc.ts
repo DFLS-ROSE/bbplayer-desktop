@@ -8,6 +8,7 @@ import type {
   LyricCandidate,
   LyricCacheEntry,
   LyricFetchResult,
+  LyricOffsetEntry,
   LogEntry,
   LyricLine,
   PlayHistoryEntry,
@@ -70,6 +71,11 @@ export const IPC = {
   LyricsFetch: 'lyrics:fetch',
   LyricsGetCached: 'lyrics:getCached',
   LyricsSaveCached: 'lyrics:saveCached',
+  LyricsGetOffset: 'lyrics:getOffset',
+  LyricsSetOffset: 'lyrics:setOffset',
+  LyricsListOffsets: 'lyrics:listOffsets',
+  LyricsResetOffset: 'lyrics:resetOffset',
+  LyricsClearOffsets: 'lyrics:clearOffsets',
   // importer
   Import: 'importer:import',
   // window control
@@ -77,6 +83,7 @@ export const IPC = {
   // logging
   LogWrite: 'log:write',
   // updater（GitHub Releases）
+  AppGetVersion: 'app:getVersion',
   AppCheckStableUpdate: 'app:checkStableUpdate',
   AppListVersions: 'app:listVersions',
   AppDownloadVersion: 'app:downloadVersion',
@@ -143,9 +150,15 @@ export interface IpcRequestMap {
   [IPC.LyricsFetch]: { source: string; songId: string; title?: string; artist?: string }
   [IPC.LyricsGetCached]: { trackId: string }
   [IPC.LyricsSaveCached]: { entry: LyricCacheEntry }
+  [IPC.LyricsGetOffset]: { bvid: string }
+  [IPC.LyricsSetOffset]: { bvid: string; title: string; offsetMs: number }
+  [IPC.LyricsListOffsets]: { limit?: number }
+  [IPC.LyricsResetOffset]: { bvid: string }
+  [IPC.LyricsClearOffsets]: undefined
   [IPC.Import]: { source: 'netease' | 'qq'; url: string }
   [IPC.WindowToggleLyrics]: undefined
   [IPC.LogWrite]: LogEntry
+  [IPC.AppGetVersion]: undefined
   [IPC.AppCheckStableUpdate]: undefined
   [IPC.AppListVersions]: undefined
   [IPC.AppDownloadVersion]: { tag: string }
@@ -220,6 +233,14 @@ export interface RendererApi {
     fetch(source: string, songId: string, title?: string, artist?: string): Promise<Result<LyricFetchResult>>
     getCached(trackId: string): Promise<Result<LyricCacheEntry | null>>
     saveCached(entry: LyricCacheEntry): Promise<Result<boolean>>
+    /** 读取该 BV 记住的歌词偏移（毫秒）；未调整过为 null */
+    getOffset(bvid: string): Promise<Result<number | null>>
+    /** 记住该 BV 的歌词偏移（毫秒），同时追加一条调整记录 */
+    setOffset(bvid: string, title: string, offsetMs: number): Promise<Result<boolean>>
+    listOffsets(limit?: number): Promise<Result<LyricOffsetEntry[]>>
+    resetOffset(bvid: string): Promise<Result<boolean>>
+    /** 清空全部偏移与调整记录，返回清除条数 */
+    clearOffsets(): Promise<Result<number>>
   }
   importer: {
     import(source: 'netease' | 'qq', url: string): Promise<Result<ImportResult>>
@@ -234,6 +255,7 @@ export interface RendererApi {
   sendLyricsUpdate(payload: LyricsUpdatePayload): void
   log(entry: LogEntry): Promise<boolean>
   checkStableUpdate(): Promise<Result<StableUpdateResult>>
+  getVersion(): Promise<Result<string>>
   listVersions(): Promise<Result<ReleaseInfo[]>>
   downloadVersion(tag: string): Promise<Result<boolean>>
 }

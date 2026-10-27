@@ -5,13 +5,23 @@ import { useTranslation } from 'react-i18next'
 import { useSettingsStore } from '@renderer/store/settings-store'
 import { BUILTIN_THEMES } from '@renderer/theme/themes'
 import { toast } from '@renderer/components/ui'
+import { formatOffset } from '@shared/lyrics-offset'
 import i18n, { SUPPORTED_LANGUAGES } from '@renderer/i18n'
-import type { ReleaseInfo, StableUpdateResult, UpdateStatus } from '@shared/types'
+import type { LyricOffsetEntry, ReleaseInfo, StableUpdateResult, UpdateStatus } from '@shared/types'
 
 export function SettingsPage() {
   const { t } = useTranslation()
   const settings = useSettingsStore((s) => s.settings)
   const update = useSettingsStore((s) => s.update)
+
+  // 版本号从主进程读，避免像以前那样在文案里写死导致版本对不上
+  const [version, setVersion] = useState('')
+  useEffect(() => {
+    void (async () => {
+      const r = await window.api.getVersion()
+      if (r.ok) setVersion(r.data)
+    })()
+  }, [])
 
   const setOverlay = (patch: Partial<typeof settings.lyricOverlay>): void => {
     void update({ lyricOverlay: { ...settings.lyricOverlay, ...patch } })
@@ -157,6 +167,10 @@ export function SettingsPage() {
         />
       </Section>
 
+      <Section title="歌词偏移记录">
+        <LyricOffsetList />
+      </Section>
+
       <Section title={t('settings.language')}>
         <div className="flex items-center gap-3 text-sm">
           <span className="w-24 text-[var(--color-text-secondary)]">{t('settings.language')}</span>
@@ -183,7 +197,7 @@ export function SettingsPage() {
 
       <Section title="关于">
         <p className="text-sm text-[var(--color-text-secondary)]">
-          BBPlayer Desktop v0.1.0 · B 站音频播放器桌面端（开源 MIT）。
+          BBPlayer Desktop v{version || '…'} · B 站音频播放器桌面端（开源 MIT）。
           快捷键自定义、开机自启等功能将在后续版本提供。
         </p>
         <button
@@ -196,6 +210,84 @@ export function SettingsPage() {
 
       <CheckUpdateSection />
       <VersionListSection />
+    </div>
+  )
+}
+
+/** 歌词偏移记录：按 BV 号列出调过的曲目，可单条清除或全部清空 */
+function LyricOffsetList() {
+  const [rows, setRows] = useState<LyricOffsetEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = async (): Promise<void> => {
+    const r = await window.api.lyrics.listOffsets(50)
+    setRows(r.ok ? r.data : [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const resetOne = async (bvid: string): Promise<void> => {
+    const r = await window.api.lyrics.resetOffset(bvid)
+    if (!r.ok) {
+      toast(r.error.message, 'error')
+      return
+    }
+    void load()
+  }
+
+  const clearAll = async (): Promise<void> => {
+    const r = await window.api.lyrics.clearOffsets()
+    if (!r.ok) {
+      toast(r.error.message, 'error')
+      return
+    }
+    toast(`已清除 ${r.data} 条偏移记录`, 'success')
+    void load()
+  }
+
+  return (
+    <div className="text-sm">
+      <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+        调节过的歌曲会按 BV 号记住，同一视频（含其它分P）下次播放自动套用，无需反复调整。
+      </p>
+      {loading ? (
+        <p className="py-3 text-xs text-[var(--color-text-secondary)]">加载中…</p>
+      ) : rows.length === 0 ? (
+        <p className="py-3 text-xs text-[var(--color-text-secondary)]">还没有调整过任何歌词偏移。</p>
+      ) : (
+        <>
+          <div className="flex flex-col divide-y divide-black/5 dark:divide-white/10">
+            {rows.map((r) => (
+              <div key={r.bvid} className="flex items-center gap-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="line-clamp-1">{r.title || r.bvid}</div>
+                  <div className="text-xs text-[var(--color-text-secondary)]">
+                    {r.bvid} · 调整 {r.changeCount} 次 · {new Date(r.updatedAt).toLocaleString()}
+                  </div>
+                </div>
+                <span className="shrink-0 tabular-nums text-[var(--color-accent)]">
+                  {formatOffset(r.offsetMs / 1000)}
+                </span>
+                <button
+                  className="shrink-0 rounded px-2 py-1 text-xs text-[var(--color-text-secondary)] hover:bg-black/5 dark:hover:bg-white/10"
+                  onClick={() => void resetOne(r.bvid)}
+                >
+                  清除
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            className="mt-3 text-xs text-[var(--color-accent)] hover:underline"
+            onClick={() => void clearAll()}
+          >
+            全部清除（{rows.length} 条）
+          </button>
+        </>
+      )}
     </div>
   )
 }

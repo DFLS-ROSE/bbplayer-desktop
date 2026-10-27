@@ -74,6 +74,21 @@ export function registerLibraryHandlers({ repositories, appStore }: ServiceDeps)
     wrap(() => repositories.lyricCache.save(payload.entry)),
   )
 
+  // —— 歌词偏移（按 BV 号记忆，含调整记录）——
+  handleSafe(IPC.LyricsGetOffset, (_e, payload: { bvid: string }) =>
+    wrap(() => repositories.lyricOffset.get(payload.bvid)),
+  )
+  handleSafe(IPC.LyricsSetOffset, (_e, payload: { bvid: string; title: string; offsetMs: number }) =>
+    wrap(() => repositories.lyricOffset.set(payload.bvid, payload.title, payload.offsetMs)),
+  )
+  handleSafe(IPC.LyricsListOffsets, (_e, payload: { limit?: number }) =>
+    wrap(() => repositories.lyricOffset.list(payload.limit)),
+  )
+  handleSafe(IPC.LyricsResetOffset, (_e, payload: { bvid: string }) =>
+    wrap(() => repositories.lyricOffset.reset(payload.bvid)),
+  )
+  handleSafe(IPC.LyricsClearOffsets, () => wrap(() => repositories.lyricOffset.clearAll()))
+
   // —— 设置 ——
   handleSafe(IPC.SettingsGet, () => wrap(() => appStore.getSettings()))
   handleSafe(IPC.SettingsSet, (_e, payload: { patch: Partial<Settings> }) =>

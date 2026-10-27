@@ -10,6 +10,7 @@ import {
   PlaylistRepository,
   HistoryRepository,
   ProgressRepository,
+  LyricOffsetRepository,
   Repositories,
 } from '../src/main/db/repositories.ts'
 import type { Track, PlayHistoryEntry, PlaybackProgress } from '../src/shared/types.ts'
@@ -59,6 +60,24 @@ const SCHEMA = `
     duration   REAL NOT NULL DEFAULT 0,
     updated_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS lyric_offset (
+    bvid       TEXT PRIMARY KEY,
+    title      TEXT NOT NULL DEFAULT '',
+    offset_ms  INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS lyric_offset_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    bvid       TEXT NOT NULL,
+    title      TEXT NOT NULL DEFAULT '',
+    from_ms    INTEGER NOT NULL,
+    to_ms      INTEGER NOT NULL,
+    changed_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_lyric_offset_log_bvid
+    ON lyric_offset_log(bvid);
 `
 
 function createDb(): DatabaseSync {
@@ -105,12 +124,26 @@ function makeProgress(overrides: Partial<PlaybackProgress> = {}): PlaybackProgre
 }
 
 // —— 建表幂等 ——
-test('建表幂等：SCHEMA 重复 exec 不报错且表数量稳定', () => {
+test('建表幂等：SCHEMA 重复 exec 不报错且表集合稳定', () => {
   const db = new DatabaseSync(':memory:')
   db.exec(SCHEMA)
-  db.exec(SCHEMA) // 第二次执行不应报错
-  const row = db.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table'").get() as { c: number }
-  assert.equal(row.c, 4, '应包含 playlists/playlist_tracks/play_history/playback_progress 四张表')
+  const namesOf = (): string[] =>
+    (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as unknown as { name: string }[]).map(
+      (r) => r.name,
+    )
+  const before = namesOf()
+  for (const table of [
+    'playlists',
+    'playlist_tracks',
+    'play_history',
+    'playback_progress',
+    'lyric_offset',
+    'lyric_offset_log',
+  ]) {
+    assert.ok(before.includes(table), `应包含表 ${table}`)
+  }
+  db.exec(SCHEMA) // 第二次执行不应报错，也不应新增表
+  assert.deepEqual(namesOf(), before)
 })
 
 // —— PlaylistRepository：create/get/update/delete/list ——
@@ -292,4 +325,48 @@ test('Repositories: 三个仓储共享同一 db 且互不串扰', () => {
   assert.equal(repos.playlists.listTracks(p.id).length, 1)
   assert.equal(repos.history.list().length, 1)
   assert.equal(repos.progress.get('t1')!.position, 5)
+})
+
+// —— 歌词偏移（按 BV 号记忆）——
+test('LyricOffsetRepository: 写入后可按 BV 号读回，值未变不产生记录', () => {
+  const repo = new LyricOffsetRepository(createDb())
+  assert.equal(repo.get('BV1'), null)
+  assert.equal(repo.set('BV1', '晴天', 500), true)
+  assert.equal(repo.get('BV1'), 500)
+  // 同值再写：不算一次调整
+  assert.equal(repo.set('BV1', '晴天', 500), false)
+  assert.equal(repo.list()[0].changeCount, 1)
+})
+
+test('LyricOffsetRepository: 累计调整次数与最近调整排序', () => {
+  const repo = new LyricOffsetRepository(createDb())
+  repo.set('BV1', '晴天', 300)
+  repo.set('BV1', '晴天', -200)
+  repo.set('BV2', '夜曲', 1000)
+  const rows = repo.list()
+  assert.equal(rows.length, 2)
+  // 最近一次调整的在前（BV2）
+  assert.equal(rows[0].bvid, 'BV2')
+  const bv1 = rows.find((r) => r.bvid === 'BV1')!
+  assert.equal(bv1.offsetMs, -200)
+  assert.equal(bv1.changeCount, 2)
+})
+
+test('LyricOffsetRepository: 四舍五入到毫秒、空 bvid 不落库', () => {
+  const repo = new LyricOffsetRepository(createDb())
+  assert.equal(repo.set('BV1', '晴天', 123.7), true)
+  assert.equal(repo.get('BV1'), 124)
+  assert.equal(repo.set('', '无名', 100), false)
+  assert.equal(repo.get(''), null)
+})
+
+test('LyricOffsetRepository: reset 只清单个 BV，clearAll 清空全部', () => {
+  const repo = new LyricOffsetRepository(createDb())
+  repo.set('BV1', '晴天', 300)
+  repo.set('BV2', '夜曲', -500)
+  assert.equal(repo.reset('BV1'), true)
+  assert.equal(repo.get('BV1'), null)
+  assert.equal(repo.get('BV2'), -500)
+  assert.equal(repo.clearAll(), 1)
+  assert.equal(repo.list().length, 0)
 })

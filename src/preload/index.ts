@@ -53,6 +53,12 @@ const api: RendererApi = {
       ipcRenderer.invoke(IPC.LyricsFetch, { source, songId, title, artist }),
     getCached: (trackId) => ipcRenderer.invoke(IPC.LyricsGetCached, { trackId }),
     saveCached: (entry) => ipcRenderer.invoke(IPC.LyricsSaveCached, { entry }),
+    getOffset: (bvid) => ipcRenderer.invoke(IPC.LyricsGetOffset, { bvid }),
+    setOffset: (bvid, title, offsetMs) =>
+      ipcRenderer.invoke(IPC.LyricsSetOffset, { bvid, title, offsetMs }),
+    listOffsets: (limit) => ipcRenderer.invoke(IPC.LyricsListOffsets, { limit }),
+    resetOffset: (bvid) => ipcRenderer.invoke(IPC.LyricsResetOffset, { bvid }),
+    clearOffsets: () => ipcRenderer.invoke(IPC.LyricsClearOffsets),
   },
   importer: {
     import: (source, url) => ipcRenderer.invoke(IPC.Import, { source, url }),
@@ -93,6 +99,7 @@ const api: RendererApi = {
   },
   log: (entry: LogEntry) => ipcRenderer.invoke(IPC.LogWrite, entry),
   checkStableUpdate: () => ipcRenderer.invoke(IPC.AppCheckStableUpdate),
+  getVersion: () => ipcRenderer.invoke(IPC.AppGetVersion),
   listVersions: () => ipcRenderer.invoke(IPC.AppListVersions),
   downloadVersion: (tag) => ipcRenderer.invoke(IPC.AppDownloadVersion, { tag }),
 }

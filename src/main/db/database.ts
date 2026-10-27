@@ -75,5 +75,25 @@ function migrate(d: DatabaseSync): void {
       roman       TEXT,
       updated_at  INTEGER NOT NULL
     );
+
+    -- 歌词偏移：按 BV 号记忆（同一视频的不同分P共用一份偏移，不用反复调）
+    CREATE TABLE IF NOT EXISTS lyric_offset (
+      bvid       TEXT PRIMARY KEY,
+      title      TEXT NOT NULL DEFAULT '',
+      offset_ms  INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+
+    -- 偏移调整记录：每次改动留痕，用于展示调整次数与追溯
+    CREATE TABLE IF NOT EXISTS lyric_offset_log (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      bvid       TEXT NOT NULL,
+      title      TEXT NOT NULL DEFAULT '',
+      from_ms    INTEGER NOT NULL,
+      to_ms      INTEGER NOT NULL,
+      changed_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_lyric_offset_log_bvid
+      ON lyric_offset_log(bvid);
   `)
 }

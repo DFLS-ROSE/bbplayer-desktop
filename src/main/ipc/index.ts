@@ -1,4 +1,5 @@
 // IPC 中央注册入口：registerAllHandlers(deps) 增量注册各领域处理器
+import { app } from 'electron'
 import { IPC, wrap } from '../../shared/ipc'
 import type { LyricsUpdatePayload } from '../../shared/ipc'
 import type { LogEntry } from '../../shared/types'
@@ -42,6 +43,7 @@ export function registerAllHandlers(deps: ServiceDeps): void {
   })
 
   // —— 内置更新（GitHub Releases）——
+  handleSafe(IPC.AppGetVersion, () => wrap(() => app.getVersion()))
   handleSafe(IPC.AppCheckStableUpdate, () => wrap(() => checkStableUpdate()))
   handleSafe(IPC.AppListVersions, () => wrap(() => listVersions()))
   handleSafe(IPC.AppDownloadVersion, (_e, p: { tag: string }) =>

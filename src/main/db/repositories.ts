@@ -1,6 +1,7 @@
-// 歌单 / 历史 / 进度 / 歌词缓存 的仓储 CRUD（node:sqlite 同步 API）
+// 歌单 / 历史 / 进度 / 歌词缓存 / 歌词偏移 的仓储 CRUD（node:sqlite 同步 API）
 import type {
   LyricCacheEntry,
+  LyricOffsetEntry,
   PlayHistoryEntry,
   PlaybackProgress,
   Playlist,
@@ -350,16 +351,103 @@ export class LyricCacheRepository {
   }
 }
 
+interface LyricOffsetRow {
+  bvid: string
+  title: string
+  offset_ms: number
+  updated_at: number
+}
+
+/**
+ * 歌词偏移：按 BV 号记忆。
+ * 同一 BV 的不同分P（cid 不同）共用一份偏移，避免同一视频反复调整。
+ */
+export class LyricOffsetRepository {
+  constructor(private db: Db) {}
+
+  /** 读取偏移（毫秒）；从未调整过返回 null（调用方据此决定是否沿用旧 LRC 里的 [offset:]） */
+  get(bvid: string): number | null {
+    if (!bvid) return null
+    const row = this.db
+      .prepare('SELECT offset_ms FROM lyric_offset WHERE bvid = ?')
+      .get(bvid) as { offset_ms: number } | undefined
+    return row ? row.offset_ms : null
+  }
+
+  /** 写入偏移；值没变化时不产生调整记录。返回是否发生实际变化。 */
+  set(bvid: string, title: string, offsetMs: number): boolean {
+    if (!bvid) return false
+    const next = Math.round(offsetMs)
+    const prev = this.get(bvid)
+    if (prev === next) return false
+
+    const now = Date.now()
+    this.db
+      .prepare(
+        `INSERT INTO lyric_offset (bvid, title, offset_ms, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(bvid) DO UPDATE SET
+           title = excluded.title,
+           offset_ms = excluded.offset_ms,
+           updated_at = excluded.updated_at`,
+      )
+      .run(bvid, title, next, now)
+    this.db
+      .prepare(
+        `INSERT INTO lyric_offset_log (bvid, title, from_ms, to_ms, changed_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(bvid, title, prev ?? 0, next, now)
+    return true
+  }
+
+  /** 偏移列表（最近调整在前），带累计调整次数 */
+  list(limit = 100): LyricOffsetEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT o.bvid, o.title, o.offset_ms, o.updated_at,
+                (SELECT COUNT(*) FROM lyric_offset_log l WHERE l.bvid = o.bvid) AS change_count
+         FROM lyric_offset o
+         ORDER BY o.updated_at DESC, o.rowid DESC
+         LIMIT ?`,
+      )
+      .all(limit) as unknown as (LyricOffsetRow & { change_count: number })[]
+    return rows.map((r) => ({
+      bvid: r.bvid,
+      title: r.title,
+      offsetMs: r.offset_ms,
+      updatedAt: r.updated_at,
+      changeCount: r.change_count,
+    }))
+  }
+
+  /** 清除某 BV 的偏移（调整日志保留，便于统计） */
+  reset(bvid: string): boolean {
+    if (!bvid) return false
+    const info = this.db.prepare('DELETE FROM lyric_offset WHERE bvid = ?').run(bvid)
+    return Number(info.changes) > 0
+  }
+
+  /** 清空全部偏移与调整记录 */
+  clearAll(): number {
+    const info = this.db.prepare('DELETE FROM lyric_offset').run()
+    this.db.prepare('DELETE FROM lyric_offset_log').run()
+    return Number(info.changes)
+  }
+}
+
 export class Repositories {
   readonly playlists: PlaylistRepository
   readonly history: HistoryRepository
   readonly progress: ProgressRepository
   readonly lyricCache: LyricCacheRepository
+  readonly lyricOffset: LyricOffsetRepository
 
   constructor(db: Db = getDb()) {
     this.playlists = new PlaylistRepository(db)
     this.history = new HistoryRepository(db)
     this.progress = new ProgressRepository(db)
     this.lyricCache = new LyricCacheRepository(db)
+    this.lyricOffset = new LyricOffsetRepository(db)
   }
 }

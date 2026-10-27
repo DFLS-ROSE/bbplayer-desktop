@@ -225,6 +225,8 @@ export interface QrPollResult {
 
 export interface PlayUrlResult {
   audioUrl: string
+  /** 同一音频的备用 CDN 地址（节点失败时依次切换） */
+  backupUrls: string[]
   duration: number
 }
 

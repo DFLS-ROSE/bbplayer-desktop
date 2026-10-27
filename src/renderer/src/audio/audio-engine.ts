@@ -1,6 +1,8 @@
 // HTML5 Audio 播放引擎 + Web Audio 响度均衡 + 断点续播 + 历史/会话持久化
 import { usePlayerStore } from '@renderer/store/player-store'
 import { useSettingsStore } from '@renderer/store/settings-store'
+import { toast } from '@renderer/components/ui'
+import { buildSourceList, hostOf } from '@shared/media-sources'
 import type { SessionContext, Track } from '@shared/types'
 
 type AudioCtor = typeof AudioContext
@@ -16,6 +18,15 @@ class AudioEngine {
   private volumeSaveTimer: number | null = null
   private lastProgressSaveAt = 0
   private lastSessionSaveAt = 0
+  /** 当前曲目的候选播放地址（主地址 + 备用 CDN 节点），按顺序尝试 */
+  private sources: string[] = []
+  private sourceIndex = 0
+  /** 切源时要恢复的播放位置 */
+  private resumeAt = 0
+  /** 候选地址全失败后是否已重新拉取过一次播放地址（防止无限重试） */
+  private refetchedUrls = false
+  /** 本轮播放是否已经判定彻底失败（play() 的 rejection 与 error 事件会各触发一次，避免重复提示） */
+  private failedCompletely = false
 
   constructor() {
     this.audio = new Audio()
@@ -33,15 +44,110 @@ class AudioEngine {
       void this.saveProgress()
     })
     this.audio.addEventListener('ended', () => this.onEnded())
-    this.audio.addEventListener('error', () => {
-      usePlayerStore.getState().setPlaying(false)
-      void window.api.log({
-        level: 'error',
-        scope: 'audio',
-        message: '播放出错',
-        extra: { mediaError: this.audio.error?.code, mediaErrorMsg: this.audio.error?.message },
-      })
+    this.audio.addEventListener('error', () => void this.onMediaError())
+  }
+
+  /**
+   * 播放源加载失败（mediaError 4 = SRC_NOT_SUPPORTED）。
+   *
+   * B 站 DASH 会同时下发主地址和若干备用 CDN 节点，其中 `*.mcdn.bilivideo.cn`
+   * 是 P2P 边缘节点，经常直接返回 503/403（响应体为空），Chromium 统一归类为
+   * 「格式不支持」，看起来像编码问题，其实是节点挂了。这里按顺序切到备用地址，
+   * 全挂则重新拉一次播放地址（签名与节点是动态分配的，重取往往能换到好节点）。
+   */
+  private async onMediaError(): Promise<void> {
+    const store = usePlayerStore.getState()
+    const track = store.currentTrack
+    const errCode = this.audio.error?.code
+    if (!track || this.sources.length === 0 || this.failedCompletely) return
+
+    const failedUrl = this.sources[this.sourceIndex] ?? ''
+    // 切源前记住播放进度，避免换节点后从头开始
+    if (Number.isFinite(this.audio.currentTime) && this.audio.currentTime > 1) {
+      this.resumeAt = this.audio.currentTime
+    }
+
+    store.setPlaying(false)
+    void window.api.log({
+      level: 'warn',
+      scope: 'audio',
+      message: '播放源加载失败',
+      extra: {
+        mediaError: errCode,
+        mediaErrorMsg: this.audio.error?.message,
+        host: hostOf(failedUrl),
+        tried: this.sourceIndex + 1,
+        total: this.sources.length,
+      },
     })
+
+    // 1. 先切下一个备用地址
+    if (this.sourceIndex + 1 < this.sources.length) {
+      this.sourceIndex += 1
+      this.applySource()
+      try {
+        await this.audio.play()
+        store.setPlaying(true)
+      } catch {
+        /* 再失败会继续触发 error 事件，交由下一次处理 */
+      }
+      return
+    }
+
+    // 2. 备用地址也全挂：重新取一次播放地址（新的签名 / 新的节点）
+    if (!this.refetchedUrls) {
+      this.refetchedUrls = true
+      try {
+        const r = await window.api.bili.playUrl(track.bvid, track.cid)
+        if (r.ok) {
+          const sources = buildSourceList(r.data.audioUrl, r.data.backupUrls)
+          if (sources.length > 0) {
+            this.sources = sources
+            this.sourceIndex = 0
+            void window.api.log({
+              level: 'info',
+              scope: 'audio',
+              message: '重新获取播放地址',
+              extra: { count: this.sources.length, host: hostOf(this.sources[0] ?? '') },
+            })
+            this.applySource()
+            try {
+              await this.audio.play()
+              store.setPlaying(true)
+            } catch {
+              /* 新地址也失败时由 error 事件继续走这一轮的候选，不在这里判死 */
+            }
+            return
+          }
+        }
+      } catch {
+        /* 取地址本身失败，落到下面的统一失败处理 */
+      }
+    }
+
+    // 3. 彻底失败：明确告知用户，不要在元素上留下半死状态
+    this.failedCompletely = true
+    void window.api.log({
+      level: 'error',
+      scope: 'audio',
+      message: '所有播放源均不可用',
+      extra: { mediaError: errCode, trackId: track.id },
+    })
+    toast('这首暂时播放不了（B 站 CDN 节点异常），稍后重试或换一首', 'error')
+  }
+
+  /** 把当前候选地址装载到 audio 元素上 */
+  private applySource(): void {
+    const url = this.sources[this.sourceIndex]
+    if (!url) return
+    this.audio.src = url
+    if (this.resumeAt > 0) {
+      try {
+        this.audio.currentTime = this.resumeAt
+      } catch {
+        /* 元数据未就绪时赋值可能抛错，忽略即可，load 后 Chromium 会自行定位 */
+      }
+    }
   }
 
   private syncDuration(): void {
@@ -94,13 +200,14 @@ class AudioEngine {
       }
     }
 
-    // 取播放地址
-    let audioUrl = resolved.audioUrl
-    if (!audioUrl) {
+    // 取播放地址：主地址 + 备用 CDN 节点，一起交给失败切换逻辑
+    let sources: string[] = []
+    if (resolved.audioUrl) sources = buildSourceList(resolved.audioUrl, [])
+    else {
       const r = await window.api.bili.playUrl(resolved.bvid, resolved.cid)
       if (!r.ok) throw new Error(r.error.message)
-      audioUrl = r.data.audioUrl
-      resolved = { ...resolved, audioUrl }
+      sources = buildSourceList(r.data.audioUrl, r.data.backupUrls)
+      resolved = { ...resolved, audioUrl: r.data.audioUrl }
       if (r.data.duration) store.setDuration(r.data.duration)
       this.applyResolved(resolved)
     }
@@ -117,8 +224,12 @@ class AudioEngine {
       }
     }
 
-    this.audio.src = audioUrl
-    this.audio.currentTime = startAt
+    this.sources = sources
+    this.sourceIndex = 0
+    this.resumeAt = startAt
+    this.refetchedUrls = false
+    this.failedCompletely = false
+    this.applySource()
     store.setPosition(startAt)
     this.setVolume(store.volume)
 
@@ -127,12 +238,17 @@ class AudioEngine {
       await this.audio.play()
     } catch (e) {
       usePlayerStore.getState().setPlaying(false)
-      void window.api.log({
-        level: 'warn',
-        scope: 'audio',
-        message: '播放失败',
-        extra: { error: e instanceof Error ? e.message : String(e), trackId: resolved.id },
-      })
+      // 源加载失败交给 onMediaError 做备用地址切换（它会记一条更完整的日志），这里不重复记
+      const isSrcUnsupported =
+        this.audio.error?.code === 4 || (e instanceof Error && e.name === 'NotSupportedError')
+      if (!isSrcUnsupported) {
+        void window.api.log({
+          level: 'warn',
+          scope: 'audio',
+          message: '播放失败',
+          extra: { error: e instanceof Error ? e.message : String(e), trackId: resolved.id },
+        })
+      }
     }
     void this.recordHistory(resolved)
     void this.saveSession()
@@ -153,9 +269,14 @@ class AudioEngine {
     }
   }
 
+  /** 元素上是否还有一个「能重新播」的源：NETWORK_NO_SOURCE 表示元素已放弃加载，直接 play() 只会报 no supported sources */
+  private hasPlayableSource(): boolean {
+    return !!this.audio.src && this.audio.networkState !== HTMLMediaElement.NETWORK_NO_SOURCE
+  }
+
   /** 切换播放/暂停：无源时若有当前曲目则直接加载播放；否则按底层真实状态切换并保持 store 同步 */
   toggle(): void {
-    if (!this.audio.src) {
+    if (!this.hasPlayableSource()) {
       this.startCurrent()
       return
     }
@@ -164,7 +285,7 @@ class AudioEngine {
   }
 
   play(): void {
-    if (!this.audio.src) {
+    if (!this.hasPlayableSource()) {
       this.startCurrent()
       return
     }
@@ -176,10 +297,14 @@ class AudioEngine {
     usePlayerStore.getState().setPlaying(false)
   }
 
-  /** 无音频源但存在当前曲目时，重新加载并播放（如启动续播未开启时点击播放） */
+  /**
+   * 无可用音频源但存在当前曲目时重新加载播放。
+   * 强制丢弃曲目上缓存的 audioUrl（签名会过期、节点会换），重新向接口取地址。
+   */
   private startCurrent(): void {
     const s = usePlayerStore.getState()
-    if (s.currentTrack) void this.playTrack(s.currentTrack, s.queue, s.queueIndex)
+    if (!s.currentTrack) return
+    void this.playTrack({ ...s.currentTrack, audioUrl: undefined }, s.queue, s.queueIndex)
   }
 
   /** 播放前恢复 Web Audio 图（响度均衡），播放后同步 store；失败时回滚为暂停态 */
@@ -205,6 +330,11 @@ class AudioEngine {
       usePlayerStore.getState().setPlaying(true)
     } catch (e) {
       usePlayerStore.getState().setPlaying(false)
+      // 元素已彻底没有可用源（例如节点 503 后被判 NO_SOURCE）：重新取地址再播，别停在死状态
+      if (!this.hasPlayableSource()) {
+        this.startCurrent()
+        return
+      }
       void window.api.log({
         level: 'warn',
         scope: 'audio',
@@ -272,7 +402,7 @@ class AudioEngine {
     void this.saveProgress()
     if (s.mode === 'loop-one') {
       this.audio.currentTime = 0
-      void this.audio.play()
+      this.audio.play().catch(() => this.startCurrent())
       return
     }
     if (s.mode === 'sequence' && s.queueIndex >= s.queue.length - 1) {

@@ -13,10 +13,14 @@ function isDev(): boolean {
 
 let installed = false
 
-/** B 站音视频 CDN 主机（DASH 的 m4s / durl 的 mp4 都落在这里） */
-const MEDIA_HOST_FILTER = {
-  urls: ['*://*.bilivideo.com/*', '*://*.bilivideo.cn/*'],
-}
+/** B 站音视频 CDN 的主机后缀。除自家域名外还有第三方 P2P 加速节点（如 mountaintoys.cn） */
+const MEDIA_HOST_SUFFIXES = [
+  '.bilivideo.com',
+  '.bilivideo.cn',
+  '.bilivideo.xyz',
+  '.mountaintoys.cn',
+  '.szbdyd.com',
+]
 
 /** 媒体请求必须携带的风控头：缺 Referer 或 UA 不是桌面浏览器时，部分节点直接回 403 */
 const MEDIA_REQUEST_HEADERS: Record<string, string> = {
@@ -28,17 +32,39 @@ const MEDIA_REQUEST_HEADERS: Record<string, string> = {
 const MEDIA_HEADER_KEYS = new Set(['referer', 'origin', 'user-agent'])
 
 /**
+ * 是否为需要补风控头的媒体请求。
+ *
+ * 不能只按主机名白名单判断：B 站 DASH 会下发若干第三方 P2P 节点
+ * （实测 `*.edge.mountaintoys.cn` 裸请求 403、补 Referer+UA 后 206），
+ * 它们的主机名千变万化。`resourceType === 'media'` 精确覆盖渲染进程的
+ * `<audio>`/`<video>` 请求，主机名后缀作为兜底。
+ */
+function isMediaRequest(url: string, resourceType: string): boolean {
+  if (resourceType === 'media') return true
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return MEDIA_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))
+  } catch {
+    return false
+  }
+}
+
+/**
  * 给渲染进程的媒体请求补齐 Referer / Origin / UA。
  *
  * 背景：`<audio>` 直连 B 站 CDN 时不带 Referer，且 Electron 默认 UA 含 `Electron/xx`，
- * upos-* 等节点会直接返回 403；Chromium 把 403 归为 MEDIA_ERR_SRC_NOT_SUPPORTED，
- * 表现为「MEDIA_ELEMENT_ERROR: Format error / 播放失败」，而易被误判成格式不支持。
+ * upos-* 与第三方 P2P 节点会直接返回 403；Chromium 把 403 归为 MEDIA_ERR_SRC_NOT_SUPPORTED，
+ * 表现为「MEDIA_ELEMENT_ERROR: Format error / 播放失败」，极易被误判成格式不支持。
  * 主进程的 HTTP 客户端已统一注入这几个头，这里补齐渲染进程这一路，保持口径一致。
  */
 function installMediaHeaderHook(): void {
   session.defaultSession.webRequest.onBeforeSendHeaders(
-    MEDIA_HOST_FILTER,
+    { urls: ['*://*/*'] },
     (details, callback) => {
+      if (!isMediaRequest(details.url, details.resourceType)) {
+        callback({})
+        return
+      }
       const requestHeaders = { ...details.requestHeaders }
       // 先按大小写无关清掉同名头，避免出现 referer / Referer 并存
       for (const key of Object.keys(requestHeaders)) {

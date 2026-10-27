@@ -40,8 +40,17 @@ interface SearchResponse {
 }
 
 interface PlayUrlResponse {
-  dash?: { audio?: { baseUrl?: string; base_url?: string }[]; duration?: number }
-  durl?: { url?: string; length?: number }[]
+  dash?: {
+    audio?: {
+      baseUrl?: string
+      base_url?: string
+      /** 备用节点：B 站会同时下发多个 CDN 地址，mcdn 等 P2P 边缘节点不稳定时用得上 */
+      backupUrl?: string[]
+      backup_url?: string[]
+    }[]
+    duration?: number
+  }
+  durl?: { url?: string; backup_url?: string[]; length?: number }[]
   timelength?: number
 }
 
@@ -158,11 +167,24 @@ export class BiliApi {
       { bvid, cid, fnval: 16, fnver: 0, fourk: 1 },
       { wbi: true },
     )
-    const audioUrl =
-      data?.dash?.audio?.[0]?.baseUrl || data?.dash?.audio?.[0]?.base_url || data?.durl?.[0]?.url
+    const audio = data?.dash?.audio?.[0]
+    const audioUrl = audio?.baseUrl || audio?.base_url || data?.durl?.[0]?.url
     if (!audioUrl) throw new Error('未获取到可播放的音频流（可能需要登录或该视频无音频轨）')
+
+    // 备用地址：B 站会同时给多个 CDN 节点（mcdn P2P 边缘节点经常 503/403），
+    // 只取第一个时节点一抖就整首放不出来，所以把备用地址一并交给渲染层做失败切换。
+    const backups = [
+      ...(audio?.backupUrl ?? []),
+      ...(audio?.backup_url ?? []),
+      ...(data?.durl?.[0]?.backup_url ?? []),
+    ]
+    const backupUrls = [...new Set(backups.filter((u) => typeof u === 'string' && u && u !== audioUrl))]
+    if (backupUrls.length > 0) {
+      logDebug('bili.api', '含备用播放地址', { traceId, count: backupUrls.length })
+    }
+
     const duration = data?.dash?.duration ?? data?.durl?.[0]?.length ?? data?.timelength ?? 0
-    return { audioUrl, duration }
+    return { audioUrl, backupUrls, duration }
   }
 
   async resolve(input: string): Promise<{ bvid: string } | null> {

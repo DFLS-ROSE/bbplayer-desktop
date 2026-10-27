@@ -13,6 +13,7 @@ import type { Buvid3Manager } from './buvid3'
 import type { HttpClient } from './http-client'
 import type { UrlResolver } from './url-resolver'
 import { toHttps } from '../../shared/security'
+import { stripHtml } from '../../shared/text'
 import { createTraceId, logDebug, logWarn } from '../logger'
 
 interface ViewResponse {
@@ -110,10 +111,10 @@ export class BiliApi {
       bvid: data.bvid ?? bvid,
       aid: data.aid ?? 0,
       cid: data.cid ?? firstPage?.cid ?? 0,
-      title: data.title ?? '',
+      title: stripHtml(data.title ?? ''),
       coverUrl: toHttps(data.pic),
       duration: data.duration ?? 0,
-      artist: data.owner?.name ?? '未知 UP 主',
+      artist: stripHtml(data.owner?.name ?? '') || '未知 UP 主',
       pages: (data.pages ?? []).map((p) => ({
         cid: p.cid ?? 0,
         part: p.part ?? '',
@@ -137,8 +138,9 @@ export class BiliApi {
         bvid: it.bvid!,
         cid: 0,
         aid: it.aid,
-        title: it.title ?? '',
-        artist: it.author ?? '未知 UP 主',
+        // 搜索接口把命中词包在 <em class="keyword"> 里，直接入库会污染界面与歌词匹配
+        title: stripHtml(it.title ?? ''),
+        artist: stripHtml(it.author ?? '') || '未知 UP 主',
         coverUrl: toHttps(it.pic),
         duration: parseDuration(it.duration),
         source: 'search' as const,
@@ -257,8 +259,8 @@ export class BiliApi {
       bvid: m.bvid,
       cid,
       aid: m.id,
-      title: m.title ?? '',
-      artist: m.upper?.name ?? '未知 UP 主',
+      title: stripHtml(m.title ?? ''),
+      artist: stripHtml(m.upper?.name ?? '') || '未知 UP 主',
       coverUrl: toHttps(m.cover),
       duration: m.duration ?? 0,
       source: 'favorite',
@@ -273,8 +275,8 @@ export class BiliApi {
       bvid: a.bvid!,
       cid,
       aid: a.id,
-      title: a.title ?? '',
-      artist: a.owner?.name ?? '未知 UP 主',
+      title: stripHtml(a.title ?? ''),
+      artist: stripHtml(a.owner?.name ?? '') || '未知 UP 主',
       coverUrl: toHttps(a.cover),
       duration: a.duration ?? 0,
       source: 'subscription',

@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 import type { LyricCandidate, LyricData, LyricFetchResult, LyricLine } from '@shared/types'
 import { usePlayerStore } from '@renderer/store/player-store'
 import { findCurrentLineIndex, parseLyric } from '@renderer/lyrics/lyrics-parser'
+import { hasAltVersionMark, normalizeTitle, stripVersionSuffix, titlesMatch } from '@shared/text'
 import { Button, Modal, Spinner, toast } from './ui'
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -88,7 +89,10 @@ export function LyricsView() {
         const candidates = search.ok ? search.data : []
         // 按评分顺序遍历候选，取第一个能解析出歌词行的（跳过翻唱/空歌词）
         for (const c of candidates.slice(0, 8)) {
-          const r = await window.api.lyrics.fetch(c.source, c.songId, c.title)
+          // 候选歌名必须能在标题里对上，否则宁可不显示——
+          // 「100 首精选合集」「演唱会全程」这类视频没有单一歌名，套上去只会串歌
+          if (!titlesMatch(stripVersionSuffix(c.title), currentTrack.title)) continue
+          const r = await window.api.lyrics.fetch(c.source, c.songId, c.title, c.artist)
           if (cancelled) return
           if (!r.ok) continue
           // 校验歌词本体歌名与实际曲目一致，防止串到别的歌
@@ -169,7 +173,7 @@ export function LyricsView() {
   }
 
   const pickCandidate = async (c: LyricCandidate): Promise<void> => {
-    const r = await window.api.lyrics.fetch(c.source, c.songId, c.title)
+    const r = await window.api.lyrics.fetch(c.source, c.songId, c.title, c.artist)
     if (!r.ok) {
       toast(r.error.message, 'error')
       return
@@ -189,32 +193,20 @@ export function LyricsView() {
   const lyricMatchesTrack = (lrc: string, title: string, artist?: string): boolean => {
     const ti = lrc.match(/\[ti:([^\]]+)\]/i)?.[1]
     const ar = lrc.match(/\[ar:([^\]]+)\]/i)?.[1]
-    const norm = (s: string): string =>
-      s.toLowerCase().replace(/[\s\-—–|/·_,、，。.!！?？"'《》「」【】()（）[\]{}]/g, '')
-    const clean = (s: string): string =>
-      s.replace(/[-—–|/].*$/, '').replace(/[（(【\[〔].*?[）)】\]〕]/g, '').trim()
-    const overlap = (a: string, b: string): number => {
-      if (!a || !b) return 0
-      const set = new Set(a)
-      let common = 0
-      for (const ch of b) if (set.has(ch)) common++
-      return common / Math.max(a.length, b.length)
-    }
 
-    // 歌名校验（有 [ti:] 时）：歌名明显不匹配则拒绝
+    // 歌名校验（有 [ti:] 时）：只对「歌词元数据」去掉版本标记，
+    // B 站视频标题本身绝不能做截断式清洗——标题里的连字符会把有效内容整段砍掉。
     if (ti) {
-      const a = norm(clean(ti))
-      const b = norm(clean(title))
-      if (a && b) {
-        const matched = a === b || a.includes(b) || b.includes(a) || overlap(a, b) > 0.55
-        if (!matched) return false
-      }
+      if (/^track\d*$/i.test(ti.trim())) return false // 酷狗占位歌词
+      // 中文填词/翻唱/伴奏等属于另一份歌词正文，除非曲子本身就是翻唱
+      if (hasAltVersionMark(ti) && !hasAltVersionMark(title)) return false
+      if (!titlesMatch(stripVersionSuffix(ti), title)) return false
     }
 
-    // 歌手校验（有 [ar:] 时）：目标标题或歌手名里完全不含歌词歌手名，且歌名仅是模糊匹配时，视为串歌拒绝
+    // 没有 [ti:] 时才用歌手兜底：歌词歌手名必须出现在标题或 UP 主名里
     if (ar && !ti) {
-      const a = norm(clean(ar))
-      const target = norm(`${title} ${artist ?? ''}`)
+      const a = normalizeTitle(stripVersionSuffix(ar))
+      const target = normalizeTitle(`${title} ${artist ?? ''}`)
       if (a && target && !target.includes(a)) return false
     }
 

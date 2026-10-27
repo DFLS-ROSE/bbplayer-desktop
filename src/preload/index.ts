@@ -49,7 +49,8 @@ const api: RendererApi = {
   },
   lyrics: {
     search: (title, artist) => ipcRenderer.invoke(IPC.LyricsSearch, { title, artist }),
-    fetch: (source, songId, title) => ipcRenderer.invoke(IPC.LyricsFetch, { source, songId, title }),
+    fetch: (source, songId, title, artist) =>
+      ipcRenderer.invoke(IPC.LyricsFetch, { source, songId, title, artist }),
     getCached: (trackId) => ipcRenderer.invoke(IPC.LyricsGetCached, { trackId }),
     saveCached: (entry) => ipcRenderer.invoke(IPC.LyricsSaveCached, { entry }),
   },

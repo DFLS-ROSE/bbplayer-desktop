@@ -2,8 +2,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  clampOffset,
   formatOffset,
+  normalizeOffset,
   readOffsetTagSec,
   stripOffsetTag,
 } from '../src/shared/lyrics-offset.ts'
@@ -22,12 +22,19 @@ test('readOffsetTagSec 把毫秒换算为秒，支持负数与空格', () => {
   assert.equal(readOffsetTagSec('[00:01.00]没有标签'), 0)
 })
 
-test('clampOffset 归一到 0.1 秒步长并限制在 ±10 秒', () => {
-  assert.equal(clampOffset(0.34), 0.3)
-  assert.equal(clampOffset(-0.36), -0.4)
-  assert.equal(clampOffset(12), 10)
-  assert.equal(clampOffset(-99), -10)
-  assert.equal(clampOffset(Number.NaN), 0)
+test('normalizeOffset 归一到 0.1 秒步长，不设上下限', () => {
+  assert.equal(normalizeOffset(0.34), 0.3)
+  assert.equal(normalizeOffset(-0.36), -0.4)
+  assert.equal(normalizeOffset(Number.NaN), 0)
+  assert.equal(normalizeOffset(Number.POSITIVE_INFINITY), 0)
+})
+
+test('normalizeOffset 允许大偏移（长前奏 / 口播 / 合集串轨）', () => {
+  // 之前被 ±10 秒截断，导致「点歌词行对齐」算出的正确值被改坏
+  assert.equal(normalizeOffset(12), 12)
+  assert.equal(normalizeOffset(-99.4), -99.4)
+  assert.equal(normalizeOffset(285.67), 285.7)
+  assert.equal(normalizeOffset(-1234), -1234)
 })
 
 test('formatOffset 展示为正负一位小数，接近 0 显示 ±0.0s', () => {

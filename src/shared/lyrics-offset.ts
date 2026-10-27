@@ -3,10 +3,9 @@
 // 渲染进程与测试共用，避免逻辑散落在组件里无法覆盖。
 // ============================================================================
 
-/** 偏移步长与上下限（秒） */
+/** 偏移步长（秒） */
 export const OFFSET_FINE = 0.1
 export const OFFSET_COARSE = 0.5
-export const OFFSET_LIMIT = 10
 
 /**
  * 去掉 LRC 里的 `[offset:毫秒]` 标签。
@@ -23,11 +22,16 @@ export function readOffsetTagSec(lrc: string): number {
   return m ? Number(m[1]) / 1000 : 0
 }
 
-/** 偏移归一到 0.1 秒步长并限制在 ±10 秒内 */
-export function clampOffset(sec: number, limit = OFFSET_LIMIT): number {
+/**
+ * 偏移归一到 0.1 秒步长，非法值归零。
+ *
+ * 不设上限：一首歌的歌词整体错位几十秒很常见（前奏长、视频开头有口播、
+ * 合集里歌词来自另一段），设上限会让「点歌词行对齐」算出的正确值被截断，
+ * 反而更不准。误操作可以按「归零」撤销。
+ */
+export function normalizeOffset(sec: number): number {
   if (!Number.isFinite(sec)) return 0
-  const rounded = Math.round(sec * 10) / 10
-  return Math.max(-limit, Math.min(limit, rounded))
+  return Math.round(sec * 10) / 10
 }
 
 /** 展示格式：±0.0s（正数表示歌词提前） */

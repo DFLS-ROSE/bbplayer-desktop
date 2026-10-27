@@ -8,8 +8,8 @@ import { hasAltVersionMark, normalizeTitle, stripVersionSuffix, titlesMatch } fr
 import {
   OFFSET_COARSE,
   OFFSET_FINE,
-  clampOffset,
   formatOffset,
+  normalizeOffset,
   readOffsetTagSec,
   stripOffsetTag,
 } from '@shared/lyrics-offset'
@@ -62,14 +62,14 @@ export function LyricsView() {
 
   /** 设置偏移：界面立即生效，落库防抖（按 BV 号记忆，同一 BV 的分P共用） */
   const applyOffset = (nextSec: number): void => {
-    const clamped = clampOffset(nextSec)
-    setOffset(clamped)
+    const next = normalizeOffset(nextSec)
+    setOffset(next)
     const t = trackRef.current
     if (!t) return
     if (offsetTimer.current != null) window.clearTimeout(offsetTimer.current)
     offsetTimer.current = window.setTimeout(() => {
       offsetTimer.current = null
-      void window.api.lyrics.setOffset(t.bvid, t.title, Math.round(clamped * 1000))
+      void window.api.lyrics.setOffset(t.bvid, t.title, Math.round(next * 1000))
     }, OFFSET_SAVE_DELAY)
   }
 

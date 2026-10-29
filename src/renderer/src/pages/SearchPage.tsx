@@ -2,46 +2,53 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Track } from '@shared/types'
+import { buildPartTracks } from '@shared/video-parts'
 import { useSearch } from '@renderer/api/client'
 import { engine } from '@renderer/audio/audio-engine'
 import { SearchBar } from '@renderer/components/SearchBar'
 import { TrackList } from '@renderer/components/TrackList'
-import { Spinner, toast } from '@renderer/components/ui'
+import { Spinner } from '@renderer/components/ui'
 
 type Tab = 'bili' | 'local'
+
+/** 精确识别到的视频（BV / AV / 短链），按分 P 展开 */
+interface DirectHit {
+  title: string
+  partCount: number
+  tracks: Track[]
+}
 
 export function SearchPage() {
   const [keyword, setKeyword] = useState('')
   const [tab, setTab] = useState<Tab>('bili')
   const [localResults, setLocalResults] = useState<Track[]>([])
   const [resolving, setResolving] = useState(false)
+  const [direct, setDirect] = useState<DirectHit | null>(null)
 
   const { data: biliResult, isLoading } = useSearch(keyword, 1)
 
   const handleSearch = async (input: string): Promise<void> => {
-    setKeyword(input)
+    const trimmed = input.trim()
     setTab('bili')
+    setLocalResults([])
+    setDirect(null)
+    if (!trimmed) {
+      setKeyword('')
+      return
+    }
 
-    // 先尝试解析 BV/AV/短链，命中则直接播放
+    // 先尝试把输入当作 BV / AV / 短链解析
     setResolving(true)
     try {
-      const resolved = await window.api.bili.resolve(input)
+      const resolved = await window.api.bili.resolve(trimmed)
       if (resolved.ok && resolved.data) {
         const r = await window.api.bili.getVideo(resolved.data.bvid)
         if (r.ok) {
-          const track: Track = {
-            id: `${r.data.bvid}_${r.data.cid}`,
-            bvid: r.data.bvid,
-            cid: r.data.cid,
-            aid: r.data.aid,
-            title: r.data.title,
-            artist: r.data.artist,
-            coverUrl: r.data.coverUrl,
-            duration: r.data.duration,
-            source: 'search',
-          }
-          await engine.playTrack(track, [track], 0)
-          toast('正在播放', 'success')
+          // 识别成功：作为结果展示，由用户点播放（不再自动播放）；
+          // 多 P 视频逐 P 列出，每个 P 都能单独播放
+          const tracks = buildPartTracks(r.data)
+          setDirect({ title: r.data.title, partCount: tracks.length, tracks })
+          setKeyword('') // 精确识别命中，不再做关键词搜索
           return
         }
       }
@@ -56,8 +63,9 @@ export function SearchPage() {
       setResolving(false)
     }
 
-    // 本地歌单内搜索
-    const local = await window.api.library.search(input)
+    // 普通关键词：B 站搜索 + 本地歌单内搜索
+    setKeyword(trimmed)
+    const local = await window.api.library.search(trimmed)
     if (local.ok) setLocalResults(local.data)
   }
 
@@ -80,7 +88,22 @@ export function SearchPage() {
             <Spinner />
           </div>
         ) : tab === 'bili' ? (
-          isLoading ? (
+          direct ? (
+            <div>
+              <p className="mb-2 text-xs text-[var(--color-text-secondary)]">
+                识别到视频：{direct.title}
+                {direct.partCount > 1 && ` · 共 ${direct.partCount} 个分P，点击播放任一分P`}
+              </p>
+              <TrackList
+                tracks={direct.tracks}
+                emptyText="未找到该视频"
+                onPlay={(index) => {
+                  const t = direct.tracks[index]
+                  if (t) void engine.playTrack(t, direct.tracks, index)
+                }}
+              />
+            </div>
+          ) : isLoading ? (
             <div className="flex justify-center py-8">
               <Spinner />
             </div>

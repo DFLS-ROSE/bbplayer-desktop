@@ -109,8 +109,8 @@ export function PlaylistPage() {
         </div>
       </aside>
 
-      {/* 右侧曲目 */}
-      <main className="min-w-0 flex-1 overflow-y-auto p-4">
+      {/* 右侧曲目（不用 <main>：页面栈里 App 已有一个 main，嵌套 main 是无效 HTML） */}
+      <section className="min-w-0 flex-1 overflow-y-auto p-4">
         {selected ? (
           <>
             <div className="mb-3 flex items-center gap-2">
@@ -126,7 +126,7 @@ export function PlaylistPage() {
             选择或新建一个歌单
           </div>
         )}
-      </main>
+      </section>
 
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
     </div>

@@ -2,15 +2,13 @@
 import { app, Menu, nativeImage, Tray } from 'electron'
 import { join } from 'node:path'
 import { sendPlayerCommand } from './ipc/player'
-import { setQuitting, showMainWindow, toggleLyricsWindow } from './window-manager'
+import { isLyricsWindowVisible, setQuitting, showMainWindow, toggleLyricsWindow } from './window-manager'
 
 let tray: Tray | null = null
 
-export function createTray(): Tray {
-  const icon = nativeImage.createFromPath(join(__dirname, '../../resources/icon.png'))
-  tray = new Tray(icon)
-
-  const menu = Menu.buildFromTemplate([
+/** 构建托盘菜单：每次右键都重建，歌词悬浮窗的勾选状态才能反映真实情况 */
+function buildMenu(): Menu {
+  return Menu.buildFromTemplate([
     { label: '显示主窗口', click: () => showMainWindow() },
     { type: 'separator' },
     { label: '播放 / 暂停', click: () => sendPlayerCommand({ type: 'toggle' }) },
@@ -26,7 +24,12 @@ export function createTray(): Tray {
       ],
     },
     { label: '切换响度均衡', click: () => sendPlayerCommand({ type: 'toggleLoudness' }) },
-    { label: '显示 / 隐藏歌词悬浮窗', click: () => toggleLyricsWindow() },
+    {
+      label: '歌词悬浮窗',
+      type: 'checkbox',
+      checked: isLyricsWindowVisible(),
+      click: () => toggleLyricsWindow(),
+    },
     { type: 'separator' },
     {
       label: '退出',
@@ -36,9 +39,18 @@ export function createTray(): Tray {
       },
     },
   ])
+}
+
+export function createTray(): Tray {
+  const icon = nativeImage.createFromPath(join(__dirname, '../../resources/icon.png'))
+  tray = new Tray(icon)
 
   tray.setToolTip('BBPlayer')
-  tray.setContextMenu(menu)
+  tray.setContextMenu(buildMenu())
+  // 右键时重建一次，勾选状态才准
+  tray.on('right-click', () => {
+    if (tray && !tray.isDestroyed()) tray.setContextMenu(buildMenu())
+  })
   tray.on('click', () => showMainWindow())
   return tray
 }

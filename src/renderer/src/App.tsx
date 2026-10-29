@@ -1,6 +1,7 @@
 // 根组件：react-query + HashRouter + 主题 + 媒体键 + 会话恢复 + i18n
-import { lazy, Suspense, useEffect } from 'react'
-import { HashRouter, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import type { ComponentType } from 'react'
+import { HashRouter, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider, useTranslation } from 'react-i18next'
 import i18n from './i18n'
@@ -24,6 +25,17 @@ const HistoryPage = lazy(() => import('./pages/HistoryPage').then((m) => ({ defa
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 const NowPlayingPage = lazy(() => import('./pages/NowPlayingPage').then((m) => ({ default: m.NowPlayingPage })))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
+
+/** 路由表：路径 → 页面组件（顺序即叠放层级，后面的盖在上面） */
+const PAGES: { path: string; Element: ComponentType }[] = [
+  { path: '/', Element: HomePage },
+  { path: '/search', Element: SearchPage },
+  { path: '/playlists', Element: PlaylistPage },
+  { path: '/history', Element: HistoryPage },
+  { path: '/settings', Element: SettingsPage },
+  { path: '/now-playing', Element: NowPlayingPage },
+  { path: '/privacy', Element: PrivacyPage },
+]
 
 export default function App() {
   return (
@@ -147,23 +159,7 @@ function Root() {
       <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg)] text-[var(--color-text-primary)]">
         <div className="flex min-h-0 flex-1">
           <Sidebar />
-          <main className="min-w-0 flex-1 overflow-hidden">
-            <Suspense
-              fallback={
-                <div className="p-8 text-sm text-[var(--color-text-secondary)]">加载中…</div>
-              }
-            >
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/search" element={<SearchPage />} />
-                <Route path="/playlists" element={<PlaylistPage />} />
-                <Route path="/history" element={<HistoryPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/now-playing" element={<NowPlayingPage />} />
-                <Route path="/privacy" element={<PrivacyPage />} />
-              </Routes>
-            </Suspense>
-          </main>
+          <PageStack />
         </div>
         <PlayerBar />
       </div>
@@ -171,4 +167,56 @@ function Root() {
       <ToastHost />
     </HashRouter>
   )
+}
+
+/**
+ * 页面栈：所有访问过的页面保持挂载，切走只是隐藏。
+ *
+ * 之前用 react-router 的 <Routes>，切走就卸载页面 —— 搜索词与结果、歌单里展开的
+ * 详情、滚动位置全丢，切回来还得重新发一次请求（30s staleTime 之外还会闪一下 loading）。
+ * 现在改成叠放 + visibility 隐藏：不卸载 → 组件状态与滚动位置都留着，回来是瞬时的；
+ * 用 visibility 而不是 display，隐藏时元素仍在布局里，滚动位置不会被清零。
+ */
+function PageStack() {
+  const location = useLocation()
+  const pathname = normalizePath(location.pathname)
+  // 访问过的页面才挂载，没点过的懒加载页面不会提前下载
+  const [visited, setVisited] = useState<string[]>(() => [pathname])
+
+  useEffect(() => {
+    setVisited((prev) => (prev.includes(pathname) ? prev : [...prev, pathname]))
+  }, [pathname])
+
+  return (
+    <main className="relative min-w-0 flex-1 overflow-hidden">
+      {visited.map((path) => {
+        const page = PAGES.find((p) => p.path === path)
+        if (!page) return null
+        const active = path === pathname
+        const { Element } = page
+        return (
+          <div
+            key={path}
+            className="absolute inset-0"
+            style={{ visibility: active ? 'visible' : 'hidden', pointerEvents: active ? 'auto' : 'none' }}
+            aria-hidden={!active}
+          >
+            <Suspense
+              fallback={
+                <div className="p-8 text-sm text-[var(--color-text-secondary)]">加载中…</div>
+              }
+            >
+              <Element />
+            </Suspense>
+          </div>
+        )
+      })}
+    </main>
+  )
+}
+
+/** 归一化路径：去掉结尾斜杠（根路径除外） */
+function normalizePath(pathname: string): string {
+  if (!pathname || pathname === '/') return '/'
+  return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
 }

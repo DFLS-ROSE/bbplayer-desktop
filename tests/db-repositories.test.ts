@@ -39,6 +39,9 @@ const SCHEMA = `
     duration    INTEGER NOT NULL DEFAULT 0,
     source      TEXT NOT NULL,
     position    INTEGER NOT NULL DEFAULT 0,
+    part_index  INTEGER,
+    part_title  TEXT NOT NULL DEFAULT '',
+    video_title TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (playlist_id, track_id)
   );
   CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist
@@ -51,6 +54,10 @@ const SCHEMA = `
     title     TEXT NOT NULL DEFAULT '',
     artist    TEXT NOT NULL DEFAULT '',
     cover_url TEXT NOT NULL DEFAULT '',
+    duration  INTEGER NOT NULL DEFAULT 0,
+    part_index  INTEGER,
+    part_title  TEXT NOT NULL DEFAULT '',
+    video_title TEXT NOT NULL DEFAULT '',
     played_at INTEGER NOT NULL
   );
 
@@ -108,6 +115,7 @@ function makeHistory(overrides: Partial<PlayHistoryEntry> = {}): PlayHistoryEntr
     title: '标题',
     artist: '歌手',
     coverUrl: '',
+    duration: 0,
     playedAt: 1,
     ...overrides,
   }
@@ -205,6 +213,41 @@ test('PlaylistRepository: list 按 updated_at 降序 & type 过滤', () => {
 })
 
 // —— addTracks / removeTrack / listTracks / searchTracks ——
+test('addTracks: 分P 信息能存能取（歌单里要显示 P 序号与所属视频）', () => {
+  const repo = new PlaylistRepository(createDb())
+  const p = repo.create('a', 'local')
+  repo.addTracks(p.id, [
+    makeTrack({
+      id: 'BV1_222',
+      bvid: 'BV1',
+      cid: 222,
+      title: '下',
+      artist: '某UP主',
+      partIndex: 1,
+      partTitle: '下',
+      videoTitle: '【合集】100 首',
+    }),
+  ])
+  const t = repo.listTracks(p.id)[0]
+  assert.equal(t.partIndex, 1)
+  assert.equal(t.partTitle, '下')
+  assert.equal(t.videoTitle, '【合集】100 首')
+  // 重复加入同一首分P 时信息也要刷新
+  repo.addTracks(p.id, [
+    makeTrack({
+      id: 'BV1_222',
+      bvid: 'BV1',
+      cid: 222,
+      title: '下',
+      partIndex: 2,
+      partTitle: '下',
+      videoTitle: '【合集】100 首',
+    }),
+  ])
+  assert.equal(repo.listTracks(p.id).length, 1)
+  assert.equal(repo.listTracks(p.id)[0].partIndex, 2)
+})
+
 test('addTracks: 批量插入、position 递增、trackCount 刷新、追加续接 position', () => {
   const repo = new PlaylistRepository(createDb())
   const p = repo.create('a', 'local')
@@ -280,6 +323,34 @@ test('addTracks: 中途抛错时事务回滚，无半提交', () => {
 })
 
 // —— HistoryRepository ——
+test('HistoryRepository: 时长能存能取（历史列表要显示时长）', () => {
+  const repo = new HistoryRepository(createDb())
+  repo.add(makeHistory({ trackId: 't1', bvid: 'BV1', cid: 1, duration: 268 }))
+  assert.equal(repo.list()[0].duration, 268)
+  // 重复写入同一曲目时时长也要跟着更新
+  repo.add(makeHistory({ trackId: 't1', bvid: 'BV1', cid: 1, duration: 300, playedAt: 2 }))
+  assert.equal(repo.list()[0].duration, 300)
+})
+
+test('HistoryRepository: 分P 信息能存能取（历史列表要显示 P 序号）', () => {
+  const repo = new HistoryRepository(createDb())
+  repo.add(
+    makeHistory({
+      trackId: 't1',
+      bvid: 'BV1',
+      cid: 222,
+      duration: 200,
+      partIndex: 1,
+      partTitle: '下',
+      videoTitle: '【合集】100 首',
+    }),
+  )
+  const e = repo.list()[0]
+  assert.equal(e.partIndex, 1)
+  assert.equal(e.partTitle, '下')
+  assert.equal(e.videoTitle, '【合集】100 首')
+})
+
 test('HistoryRepository: add 返回 true；ON CONFLICT 更新而非新增', () => {
   const repo = new HistoryRepository(createDb())
   assert.equal(repo.add(makeHistory({ trackId: 't1', bvid: 'BV1', cid: 1, title: '旧' })), true)

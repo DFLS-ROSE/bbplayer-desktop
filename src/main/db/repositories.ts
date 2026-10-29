@@ -35,6 +35,9 @@ interface TrackRow {
   duration: number
   source: string
   position: number
+  part_index: number | null
+  part_title: string
+  video_title: string
 }
 
 interface HistoryRow {
@@ -44,6 +47,10 @@ interface HistoryRow {
   title: string
   artist: string
   cover_url: string
+  duration: number
+  part_index: number | null
+  part_title: string
+  video_title: string
   played_at: number
 }
 
@@ -82,6 +89,9 @@ function rowToTrack(r: TrackRow): Track {
     duration: r.duration,
     source: r.source as TrackSource,
     playlistId: r.playlist_id,
+    partIndex: r.part_index ?? undefined,
+    partTitle: r.part_title || undefined,
+    videoTitle: r.video_title || undefined,
   }
 }
 
@@ -93,6 +103,10 @@ function rowToHistory(r: HistoryRow): PlayHistoryEntry {
     title: r.title,
     artist: r.artist,
     coverUrl: r.cover_url,
+    duration: r.duration ?? 0,
+    partIndex: r.part_index ?? undefined,
+    partTitle: r.part_title || undefined,
+    videoTitle: r.video_title || undefined,
     playedAt: r.played_at,
   }
 }
@@ -151,14 +165,18 @@ export class PlaylistRepository {
     if (!playlist) return 0
     const stmt = this.db.prepare(
       `INSERT INTO playlist_tracks
-        (playlist_id, track_id, bvid, cid, aid, title, artist, cover_url, duration, source, position)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (playlist_id, track_id, bvid, cid, aid, title, artist, cover_url, duration, source, position,
+         part_index, part_title, video_title)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(playlist_id, track_id) DO UPDATE SET
          title = excluded.title,
          artist = excluded.artist,
          cover_url = excluded.cover_url,
          duration = excluded.duration,
-         source = excluded.source`,
+         source = excluded.source,
+         part_index = excluded.part_index,
+         part_title = excluded.part_title,
+         video_title = excluded.video_title`,
     )
     this.db.exec('BEGIN')
     let count = 0
@@ -177,6 +195,9 @@ export class PlaylistRepository {
           t.duration,
           t.source,
           position,
+          t.partIndex ?? null,
+          t.partTitle ?? '',
+          t.videoTitle ?? '',
         )
         count += Number(info.changes)
       }
@@ -230,15 +251,19 @@ export class HistoryRepository {
   add(entry: PlayHistoryEntry): boolean {
     const info = this.db
       .prepare(
-        `INSERT INTO play_history (track_id, bvid, cid, title, artist, cover_url, played_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO play_history (track_id, bvid, cid, title, artist, cover_url, duration, played_at, part_index, part_title, video_title)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(track_id) DO UPDATE SET
            bvid = excluded.bvid,
            cid = excluded.cid,
            title = excluded.title,
            artist = excluded.artist,
            cover_url = excluded.cover_url,
-           played_at = excluded.played_at`,
+           duration = excluded.duration,
+           played_at = excluded.played_at,
+           part_index = excluded.part_index,
+           part_title = excluded.part_title,
+           video_title = excluded.video_title`,
       )
       .run(
         entry.trackId,
@@ -247,7 +272,11 @@ export class HistoryRepository {
         entry.title,
         entry.artist,
         entry.coverUrl,
+        Math.round(entry.duration || 0),
         entry.playedAt,
+        entry.partIndex ?? null,
+        entry.partTitle ?? '',
+        entry.videoTitle ?? '',
       )
     return Number(info.changes) > 0
   }

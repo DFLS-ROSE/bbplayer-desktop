@@ -9,7 +9,7 @@ export function initDatabase(userDataPath: string): DatabaseSync {
   if (db) return db
   db = new DatabaseSync(join(userDataPath, 'bbplayer.db'))
   db.exec('PRAGMA journal_mode = WAL')
-  migrate(db)
+  applySchema(db)
   return db
 }
 
@@ -18,7 +18,8 @@ export function getDb(): DatabaseSync {
   return db
 }
 
-function migrate(d: DatabaseSync): void {
+/** 建表 + 补列（幂等，可重复执行） */
+export function applySchema(d: DatabaseSync): void {
   d.exec(`
     CREATE TABLE IF NOT EXISTS playlists (
       id          TEXT PRIMARY KEY,
@@ -42,6 +43,9 @@ function migrate(d: DatabaseSync): void {
       duration    INTEGER NOT NULL DEFAULT 0,
       source      TEXT NOT NULL,
       position    INTEGER NOT NULL DEFAULT 0,
+      part_index  INTEGER,
+      part_title  TEXT NOT NULL DEFAULT '',
+      video_title TEXT NOT NULL DEFAULT '',
       PRIMARY KEY (playlist_id, track_id)
     );
     CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist
@@ -54,6 +58,10 @@ function migrate(d: DatabaseSync): void {
       title     TEXT NOT NULL DEFAULT '',
       artist    TEXT NOT NULL DEFAULT '',
       cover_url TEXT NOT NULL DEFAULT '',
+      duration  INTEGER NOT NULL DEFAULT 0,
+      part_index  INTEGER,
+      part_title  TEXT NOT NULL DEFAULT '',
+      video_title TEXT NOT NULL DEFAULT '',
       played_at INTEGER NOT NULL
     );
 
@@ -96,4 +104,21 @@ function migrate(d: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_lyric_offset_log_bvid
       ON lyric_offset_log(bvid);
   `)
+
+  // 老库的表已建好，CREATE TABLE IF NOT EXISTS 不会补列，这里显式迁移
+  ensureColumn(d, 'play_history', 'duration', 'INTEGER NOT NULL DEFAULT 0')
+  // 分P 信息（多P 视频的序号与所属视频标题）
+  ensureColumn(d, 'playlist_tracks', 'part_index', 'INTEGER')
+  ensureColumn(d, 'playlist_tracks', 'part_title', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(d, 'playlist_tracks', 'video_title', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(d, 'play_history', 'part_index', 'INTEGER')
+  ensureColumn(d, 'play_history', 'part_title', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(d, 'play_history', 'video_title', "TEXT NOT NULL DEFAULT ''")
+}
+
+/** 缺列就补一列（SQLite 不支持 ADD COLUMN IF NOT EXISTS，只能先查表结构） */
+function ensureColumn(d: DatabaseSync, table: string, column: string, decl: string): void {
+  const cols = d.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[]
+  if (cols.some((c) => c.name === column)) return
+  d.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`)
 }

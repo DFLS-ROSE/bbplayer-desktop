@@ -65,6 +65,7 @@ const api: RendererApi = {
   },
   window: {
     toggleLyrics: () => ipcRenderer.invoke(IPC.WindowToggleLyrics),
+    lyricsVisible: () => ipcRenderer.invoke(IPC.WindowLyricsVisible),
   },
   onPlayerCommand: (cb) => {
     const listener = (_e: IpcRendererEvent, cmd: PlayerCommand): void => cb(cmd)

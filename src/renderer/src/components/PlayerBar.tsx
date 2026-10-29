@@ -1,5 +1,5 @@
 // 底部常驻播放控制栏（MD3 图标）
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PLAY_MODES } from '@shared/constants'
@@ -26,6 +26,8 @@ const MODE_ORDER: PlayMode[] = ['sequence', 'loop-all', 'loop-one', 'shuffle']
 export function PlayerBar() {
   const navigate = useNavigate()
   const [queueOpen, setQueueOpen] = useState(false)
+  /** 桌面歌词悬浮窗是否开着（按钮要能看出状态，否则用户不知道它开着没） */
+  const [lyricsVisible, setLyricsVisible] = useState(false)
 
   const currentTrack = usePlayerStore((s) => s.currentTrack)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
@@ -34,6 +36,18 @@ export function PlayerBar() {
   const volume = usePlayerStore((s) => s.volume)
   const loudness = usePlayerStore((s) => s.loudness)
   const mode = usePlayerStore((s) => s.mode)
+
+  useEffect(() => {
+    void (async () => {
+      const r = await window.api.window.lyricsVisible()
+      if (r.ok) setLyricsVisible(r.data)
+    })()
+  }, [])
+
+  const toggleLyrics = async (): Promise<void> => {
+    const r = await window.api.window.toggleLyrics()
+    setLyricsVisible(r.ok ? r.data : !lyricsVisible)
+  }
   const audioLabel = usePlayerStore((s) => s.audioLabel)
 
   const cycleMode = (): void => {
@@ -135,7 +149,11 @@ export function PlayerBar() {
               className="h-1 w-20 cursor-pointer accent-[var(--color-accent)]"
             />
           </div>
-          <ControlBtn label="歌词悬浮窗" onClick={() => void window.api.window.toggleLyrics()}>
+          <ControlBtn
+            label={lyricsVisible ? '关闭歌词悬浮窗' : '歌词悬浮窗'}
+            onClick={() => void toggleLyrics()}
+            active={lyricsVisible}
+          >
             <IconLyrics />
           </ControlBtn>
           <ControlBtn label="播放队列" onClick={() => setQueueOpen((v) => !v)} active={queueOpen}>

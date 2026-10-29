@@ -1,9 +1,13 @@
 // 播放页（展开态）：Apple Music 风格 —— 模糊封面背景 + 大封面 + 行级歌词
+import { useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { engine } from '@renderer/audio/audio-engine'
 import { usePlayerStore } from '@renderer/store/player-store'
 import { LyricsView } from '@renderer/components/LyricsView'
+import { VideoParts } from '@renderer/components/VideoParts'
 import { ProgressBar, formatTime } from '@renderer/components/ui'
 import {
+  IconBack,
   IconLoudness,
   IconNext,
   IconPause,
@@ -24,6 +28,30 @@ export function NowPlayingPage() {
   const duration = usePlayerStore((s) => s.duration)
   const mode = usePlayerStore((s) => s.mode)
   const loudness = usePlayerStore((s) => s.loudness)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // 记住「从哪个页面进来的」，返回时回到那里；直接打开本页则回首页
+  const fromPath = useRef('/')
+  useEffect(() => {
+    if (location.pathname !== '/now-playing') fromPath.current = location.pathname
+  }, [location.pathname])
+
+  const goBack = (): void => {
+    navigate(fromPath.current === '/now-playing' ? '/' : fromPath.current)
+  }
+
+  // Esc 关闭歌词页（输入框里按 Esc 不拦截）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      goBack()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const cycleMode = (): void => {
     const idx = MODE_ORDER.indexOf(mode)
@@ -54,6 +82,16 @@ export function NowPlayingPage() {
         </div>
       )}
 
+      {/* 返回：歌词页没有关闭入口的话，进来之后就只能靠侧栏出去了。
+          放在页面根层（不随左栏内容滚动） */}
+      <button
+        onClick={goBack}
+        title="返回（Esc）"
+        className="absolute left-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/5 text-[var(--color-text-primary)] transition hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20"
+      >
+        <IconBack size={20} />
+      </button>
+
       {/* 左：封面 + 信息 + 控制（自身滚动，内容用 margin 垂直居中，空间不足时自动退化为顶部对齐） */}
       <div className="relative z-10 flex w-[44%] min-w-[320px] shrink-0 flex-col overflow-y-auto overflow-x-hidden p-6">
         <div className="my-auto flex flex-col items-center gap-4">
@@ -78,7 +116,15 @@ export function NowPlayingPage() {
             <p className="mt-1 line-clamp-1 text-sm text-[var(--color-text-secondary)]">
               {track?.artist ?? 'BBPlayer'}
             </p>
+            {track?.partIndex != null && (
+              <p className="mt-1 line-clamp-1 text-xs text-[var(--color-text-secondary)]">
+                P{track.partIndex + 1}
+                {track.videoTitle && track.videoTitle !== track.title && ` · ${track.videoTitle}`}
+              </p>
+            )}
           </div>
+
+          <VideoParts track={track} />
 
           <div className="w-full max-w-sm">
             <div className="flex w-full items-center gap-2 text-xs tabular-nums text-[var(--color-text-secondary)]">

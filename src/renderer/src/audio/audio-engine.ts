@@ -179,15 +179,23 @@ class AudioEngine {
       try {
         const r = await window.api.bili.getVideo(resolved.bvid)
         if (r.ok) {
+          const pages = r.data.pages ?? []
+          const first = pages[0]
+          const isMulti = pages.length > 1
           resolved = {
             ...resolved,
             id: `${resolved.bvid}_${r.data.cid}`,
             cid: r.data.cid,
             aid: r.data.aid,
-            title: r.data.title || resolved.title,
+            // 多 P 视频的第一 P 标题往往才是这一 P 的歌名（合集 / 连播），
+            // 用它去匹配歌词比用整个合集标题准得多
+            title: (isMulti && first?.part) || r.data.title || resolved.title,
             artist: r.data.artist || resolved.artist,
             coverUrl: r.data.coverUrl || resolved.coverUrl,
-            duration: r.data.duration || resolved.duration,
+            duration: first?.duration || r.data.duration || resolved.duration,
+            videoTitle: isMulti ? r.data.title : undefined,
+            partIndex: isMulti ? 0 : undefined,
+            partTitle: isMulti ? first?.part : undefined,
           }
           this.applyResolved(resolved)
         }
@@ -486,6 +494,8 @@ class AudioEngine {
   }
 
   private async recordHistory(track: Track): Promise<void> {
+    // 时长优先取曲目自身的，缺失时用播放器的（元素元数据加载后会更新）
+    const duration = track.duration || usePlayerStore.getState().duration || 0
     await window.api.history.add({
       trackId: track.id,
       bvid: track.bvid,
@@ -493,6 +503,10 @@ class AudioEngine {
       title: track.title,
       artist: track.artist,
       coverUrl: track.coverUrl,
+      duration,
+      partIndex: track.partIndex,
+      partTitle: track.partTitle,
+      videoTitle: track.videoTitle,
       playedAt: Date.now(),
     })
   }

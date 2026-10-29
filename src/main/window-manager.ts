@@ -181,12 +181,19 @@ export function repositionLyricsWindow(): void {
   })
 }
 
-export function toggleLyricsWindow(): void {
+/** 切换桌面歌词悬浮窗，返回切换后的可见状态 */
+export function toggleLyricsWindow(): boolean {
   if (lyricsWindow && !lyricsWindow.isDestroyed() && lyricsWindow.isVisible()) {
     lyricsWindow.hide()
-  } else {
-    createLyricsWindow()
+    return false
   }
+  createLyricsWindow()
+  return true
+}
+
+/** 桌面歌词悬浮窗当前是否可见 */
+export function isLyricsWindowVisible(): boolean {
+  return !!(lyricsWindow && !lyricsWindow.isDestroyed() && lyricsWindow.isVisible())
 }
 
 export function showMainWindow(): void {

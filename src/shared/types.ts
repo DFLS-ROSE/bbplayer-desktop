@@ -27,6 +27,12 @@ export interface Track {
   audioUrl?: string // DASH 音频流地址（运行时填充，有签名时效）
   source: TrackSource
   playlistId?: string
+  /** 多 P 视频：当前是第几个分 P（从 0 开始），单 P 视频为 undefined */
+  partIndex?: number
+  /** 多 P 视频：当前分 P 的标题 */
+  partTitle?: string
+  /** 多 P 视频：视频主标题（分 P 列表用） */
+  videoTitle?: string
 }
 
 // —— 歌单 ——
@@ -48,6 +54,14 @@ export interface PlayHistoryEntry {
   title: string
   artist: string
   coverUrl: string
+  /** 曲目时长（秒），用于在历史列表里显示时长 */
+  duration: number
+  /** 多 P 视频：当前是第几个分 P */
+  partIndex?: number
+  /** 多 P 视频：当前分 P 的标题 */
+  partTitle?: string
+  /** 多 P 视频：视频主标题 */
+  videoTitle?: string
   playedAt: number
 }
 

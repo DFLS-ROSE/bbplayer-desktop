@@ -80,6 +80,7 @@ export const IPC = {
   Import: 'importer:import',
   // window control
   WindowToggleLyrics: 'window:toggleLyrics',
+  WindowLyricsVisible: 'window:lyricsVisible',
   // logging
   LogWrite: 'log:write',
   // updater（GitHub Releases）
@@ -157,6 +158,7 @@ export interface IpcRequestMap {
   [IPC.LyricsClearOffsets]: undefined
   [IPC.Import]: { source: 'netease' | 'qq'; url: string }
   [IPC.WindowToggleLyrics]: undefined
+  [IPC.WindowLyricsVisible]: undefined
   [IPC.LogWrite]: LogEntry
   [IPC.AppGetVersion]: undefined
   [IPC.AppCheckStableUpdate]: undefined
@@ -246,7 +248,10 @@ export interface RendererApi {
     import(source: 'netease' | 'qq', url: string): Promise<Result<ImportResult>>
   }
   window: {
+    /** 切换桌面歌词悬浮窗，返回切换后的可见状态 */
     toggleLyrics(): Promise<Result<boolean>>
+    /** 桌面歌词悬浮窗当前是否可见 */
+    lyricsVisible(): Promise<Result<boolean>>
   }
   onPlayerCommand(cb: (cmd: PlayerCommand) => void): () => void
   onLyricsUpdate(cb: (payload: LyricsUpdatePayload) => void): () => void

@@ -144,6 +144,18 @@ export const IconPlus = (p: IconProps) => (
   </Svg>
 )
 
+export const IconCheck = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4.5 12.5l5 5 10-11" />
+  </Svg>
+)
+
+export const IconBack = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M15 5l-7 7 7 7" />
+  </Svg>
+)
+
 export const IconClose = (p: IconProps) => (
   <Svg {...p}>
     <path d="M18 6 6 18M6 6l12 12" />

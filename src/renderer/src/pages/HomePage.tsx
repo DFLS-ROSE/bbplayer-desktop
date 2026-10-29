@@ -51,7 +51,10 @@ export function HomePage() {
               title: h.title,
               artist: h.artist,
               coverUrl: h.coverUrl,
-              duration: 0,
+              duration: h.duration,
+              partIndex: h.partIndex,
+              partTitle: h.partTitle,
+              videoTitle: h.videoTitle,
               source: 'search',
             }))}
           />

@@ -65,6 +65,20 @@ export function applySchema(d: DatabaseSync): void {
       played_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS downloads (
+      track_id    TEXT PRIMARY KEY,
+      bvid        TEXT NOT NULL,
+      cid         INTEGER NOT NULL DEFAULT 0,
+      title       TEXT NOT NULL DEFAULT '',
+      artist      TEXT NOT NULL DEFAULT '',
+      cover_url   TEXT NOT NULL DEFAULT '',
+      duration    INTEGER NOT NULL DEFAULT 0,
+      file_path   TEXT NOT NULL DEFAULT '',
+      file_size   INTEGER NOT NULL DEFAULT 0,
+      quality     TEXT NOT NULL DEFAULT '',
+      downloaded_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS playback_progress (
       track_id   TEXT PRIMARY KEY,
       position   REAL NOT NULL DEFAULT 0,

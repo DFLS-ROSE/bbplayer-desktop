@@ -14,7 +14,8 @@ export const CSP_POLICY: string = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
-  "media-src 'self' https: blob:",
+  // bbplayer-local: 用于播放下载到本地的音频（自定义协议，主进程提供文件流）
+  "media-src 'self' https: blob: bbplayer-local:",
   "font-src 'self' data:",
   "connect-src 'self' https:",
   "object-src 'none'",

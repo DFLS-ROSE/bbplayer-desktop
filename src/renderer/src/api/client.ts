@@ -1,8 +1,10 @@
 // react-query 实例 + window.api 薄封装 + 查询 hooks
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { QueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import type {
   AuthState,
+  DownloadRecord,
+  DownloadTask,
   PlayHistoryEntry,
   Playlist,
   PlaylistType,
@@ -165,4 +167,74 @@ export function useRemoveTrack() {
       void queryClient.invalidateQueries({ queryKey: ['playlist-tracks', args.playlistId] })
     },
   })
+}
+
+// —— 下载 ——
+
+/** 下载任务状态：主进程推送的进度 + 已完成记录 */
+export function useDownloads(): {
+  tasks: DownloadTask[]
+  records: DownloadRecord[]
+  downloading: Set<string>
+  refresh: () => void
+  /** 删除下载：乐观移出列表 + 清掉对应的任务状态，再失效重取 */
+  remove: (trackId: string) => Promise<Result<boolean>>
+} {
+  const { data: records = [], refetch, isFetched } = useQuery({
+    queryKey: ['downloads'],
+    queryFn: () => unwrap(window.api.download.list()),
+  })
+  const [tasks, setTasks] = useState<DownloadTask[]>([])
+
+  useEffect(() => {
+    const off = window.api.onDownloadProgress((task) => {
+      setTasks((prev) => {
+        const idx = prev.findIndex((t) => t.trackId === task.trackId)
+        if (idx < 0) return [...prev, task]
+        const next = [...prev]
+        next[idx] = task
+        return next
+      })
+      // 下载完成后刷新一次已完成列表
+      if (task.status === 'done' || task.status === 'error') {
+        void refetch()
+      }
+    })
+    return off
+  }, [refetch])
+
+  // 库里有记录才算「已完成」：下载文件被删掉（含在别处删）后，完成态的任务要跟着清掉，
+  // 否则列表里会留着一条点不动的「已下载」。正在下载 / 失败的任务不受影响。
+  useEffect(() => {
+    if (!isFetched) return
+    setTasks((prev) =>
+      prev.filter(
+        (t) => t.status !== 'done' || records.some((r) => r.trackId === t.trackId),
+      ),
+    )
+  }, [records, isFetched])
+
+  const downloading = useMemo(
+    () => new Set(tasks.filter((t) => t.status === 'downloading').map((t) => t.trackId)),
+    [tasks],
+  )
+
+  // 删除下载：只发 IPC 是不够的 —— 缓存里有 staleTime(30s)，且页面常驻不会重新挂载，
+  // 列表会一直显示已删掉的记录。所以先乐观移除，再失效重取。
+  const remove = useCallback(
+    async (trackId: string): Promise<Result<boolean>> => {
+      const r = await window.api.download.remove(trackId)
+      if (!r.ok) return r
+      queryClient.setQueryData<DownloadRecord[]>(['downloads'], (prev) =>
+        prev ? prev.filter((rec) => rec.trackId !== trackId) : prev,
+      )
+      // 内存里的任务状态（done / error）也一并丢掉，否则重新下载同一条会看到残留
+      setTasks((prev) => prev.filter((t) => t.trackId !== trackId))
+      void queryClient.invalidateQueries({ queryKey: ['downloads'] })
+      return r
+    },
+    [],
+  )
+
+  return { tasks, records, downloading, refresh: () => void refetch(), remove }
 }

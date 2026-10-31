@@ -1,4 +1,5 @@
 // HTML5 Audio 播放引擎 + Web Audio 响度均衡 + 断点续播 + 历史/会话持久化
+import { queryClient } from '@renderer/api/client'
 import { usePlayerStore } from '@renderer/store/player-store'
 import { useSettingsStore } from '@renderer/store/settings-store'
 import { toast } from '@renderer/components/ui'
@@ -95,7 +96,8 @@ class AudioEngine {
     }
 
     // 2. 备用地址也全挂：重新取一次播放地址（新的签名 / 新的节点）
-    if (!this.refetchedUrls) {
+    // 本地文件没有「换个地址」的概念，直接判失败
+    if (!this.refetchedUrls && !track.localFileId) {
       this.refetchedUrls = true
       try {
         const r = await window.api.bili.playUrl(track.bvid, track.cid)
@@ -209,9 +211,12 @@ class AudioEngine {
       }
     }
 
-    // 取播放地址：主地址 + 备用 CDN 节点，一起交给失败切换逻辑
+    // 取播放地址：本地已下载的优先用本地文件，其次在线流（主地址 + 备用 CDN 节点）
     let sources: string[] = []
-    if (resolved.audioUrl) sources = buildSourceList(resolved.audioUrl, [])
+    if (resolved.localFileId) {
+      // 本地文件走自定义协议，主进程按 trackId 提供文件流（支持 Range，拖进度条可用）
+      sources = [`bbplayer-local://track/${encodeURIComponent(resolved.localFileId)}`]
+    } else if (resolved.audioUrl) sources = buildSourceList(resolved.audioUrl, [])
     else {
       const r = await window.api.bili.playUrl(resolved.bvid, resolved.cid)
       if (!r.ok) throw new Error(r.error.message)
@@ -509,6 +514,8 @@ class AudioEngine {
       videoTitle: track.videoTitle,
       playedAt: Date.now(),
     })
+    // 页面常驻后不会再靠重新挂载刷新，「最近播放」/ 播放历史都只认缓存，必须显式失效
+    void queryClient.invalidateQueries({ queryKey: ['history'] })
   }
 
   private async saveProgress(): Promise<void> {

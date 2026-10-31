@@ -5,6 +5,7 @@ import type { Track } from '@shared/types'
 import { buildPartTracks } from '@shared/video-parts'
 import { useSearch } from '@renderer/api/client'
 import { engine } from '@renderer/audio/audio-engine'
+import { useDownload } from '@renderer/components/use-download'
 import { SearchBar } from '@renderer/components/SearchBar'
 import { TrackList } from '@renderer/components/TrackList'
 import { Spinner } from '@renderer/components/ui'
@@ -26,6 +27,7 @@ export function SearchPage() {
   const [direct, setDirect] = useState<DirectHit | null>(null)
 
   const { data: biliResult, isLoading } = useSearch(keyword, 1)
+  const download = useDownload()
 
   const handleSearch = async (input: string): Promise<void> => {
     const trimmed = input.trim()
@@ -97,6 +99,7 @@ export function SearchPage() {
               <TrackList
                 tracks={direct.tracks}
                 emptyText="未找到该视频"
+                onDownload={(t) => void download(t)}
                 onPlay={(index) => {
                   const t = direct.tracks[index]
                   if (t) void engine.playTrack(t, direct.tracks, index)
@@ -111,6 +114,7 @@ export function SearchPage() {
             <TrackList
               tracks={biliResult?.items ?? []}
               emptyText={keyword ? '未找到相关视频' : '输入关键词开始搜索'}
+              onDownload={(t) => void download(t)}
               onPlay={(index) => {
                 const t = biliResult?.items?.[index]
                 if (t) void engine.playTrack(t)

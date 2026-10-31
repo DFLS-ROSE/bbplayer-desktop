@@ -5,7 +5,8 @@ import { queryClient, usePlaylists } from '@renderer/api/client'
 import { engine } from '@renderer/audio/audio-engine'
 import { usePlayerStore } from '@renderer/store/player-store'
 import { Button, Modal, formatTime, toast } from './ui'
-import { IconCheck, IconClose, IconPause, IconPlay, IconPlus } from './icons'
+import { IconCheck, IconClose, IconDownload, IconPause, IconPlay, IconPlus } from './icons'
+import { useDownload, useDownloadedIds } from './use-download'
 
 interface Props {
   tracks: Track[]
@@ -15,6 +16,8 @@ interface Props {
   onRemove?: (trackId: string) => void
   /** 是否显示「批量添加」入口（默认开启） */
   selectable?: boolean
+  /** 自定义下载行为；不传则用默认的下载流程（默认就有下载按钮） */
+  onDownload?: (track: Track) => void
 }
 
 export function TrackList({
@@ -24,9 +27,12 @@ export function TrackList({
   removable,
   onRemove,
   selectable = true,
+  onDownload,
 }: Props) {
   const current = usePlayerStore((s) => s.currentTrack)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const download = useDownload()
+  const downloaded = useDownloadedIds()
   /** 待加入歌单的曲目（1 首 = 单条添加，N 首 = 批量添加） */
   const [addTarget, setAddTarget] = useState<Track[] | null>(null)
   const [selecting, setSelecting] = useState(false)
@@ -62,7 +68,7 @@ export function TrackList({
   return (
     <>
       {selectable && tracks.length > 1 && (
-        <div className="sticky top-0 z-10 mb-1 flex items-center justify-end gap-3 bg-[var(--color-bg)]/85 py-1.5 text-xs backdrop-blur">
+        <div className="sticky top-0 z-10 mb-1 flex h-9 items-center justify-end gap-3 bg-[var(--color-bg)]/85 text-xs backdrop-blur">
           {selecting ? (
             <>
               <span className="text-[var(--color-text-secondary)]">已选 {selected.length} 首</span>
@@ -72,16 +78,21 @@ export function TrackList({
               >
                 {allSelected ? '取消全选' : '全选'}
               </button>
-              {selectedTracks.length > 0 && (
-                <Button
-                  onClick={() => {
-                    setAddTarget(selectedTracks)
-                    exitSelect()
-                  }}
-                >
-                  加入歌单
-                </Button>
-              )}
+              {/* 常驻显示（未选中时置灰）：按钮一出现就会把列表顶下去几像素 */}
+              <button
+                disabled={selectedTracks.length === 0}
+                onClick={() => {
+                  setAddTarget(selectedTracks)
+                  exitSelect()
+                }}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  selectedTracks.length > 0
+                    ? 'bg-[var(--color-accent)] text-white hover:opacity-90'
+                    : 'cursor-not-allowed bg-black/5 text-[var(--color-text-secondary)] opacity-60 dark:bg-white/10'
+                }`}
+              >
+                加入歌单
+              </button>
               <button
                 className="text-[var(--color-text-secondary)] transition hover:opacity-80"
                 onClick={exitSelect}
@@ -118,15 +129,17 @@ export function TrackList({
               }}
             >
               {selecting ? (
-                <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition ${
-                    isSelected
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-on-accent)]'
-                      : 'border-black/15 text-transparent dark:border-white/25'
-                  }`}
-                  aria-label={isSelected ? '取消选择' : '选择'}
-                >
-                  <IconCheck size={16} />
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center">
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded-[4px] border transition ${
+                      isSelected
+                        ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-on-accent)]'
+                        : 'border-black/25 text-transparent dark:border-white/30'
+                    }`}
+                    aria-label={isSelected ? '取消选择' : '选择'}
+                  >
+                    <IconCheck size={11} />
+                  </span>
                 </span>
               ) : (
                 <button
@@ -165,16 +178,37 @@ export function TrackList({
               )}
               <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">{formatTime(t.duration)}</span>
               {!selecting && (
-                <button
-                  className="shrink-0 rounded p-1.5 text-[var(--color-text-secondary)] opacity-0 transition hover:bg-black/5 group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setAddTarget([t])
-                  }}
-                  title="加入歌单"
-                >
-                  <IconPlus size={15} />
-                </button>
+                <>
+                  {downloaded.matches(t) ? (
+                    <span
+                      className="shrink-0 p-1.5 text-[var(--color-accent)]"
+                      title="已下载到本地"
+                    >
+                      <IconCheck size={15} />
+                    </span>
+                  ) : (
+                    <button
+                      className="shrink-0 rounded p-1.5 text-[var(--color-text-secondary)] opacity-0 transition hover:bg-black/5 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void (onDownload ?? download)(t)
+                      }}
+                      title="下载到本地"
+                    >
+                      <IconDownload size={15} />
+                    </button>
+                  )}
+                  <button
+                    className="shrink-0 rounded p-1.5 text-[var(--color-text-secondary)] opacity-0 transition hover:bg-black/5 group-hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setAddTarget([t])
+                    }}
+                    title="加入歌单"
+                  >
+                    <IconPlus size={15} />
+                  </button>
+                </>
               )}
               {removable && onRemove && (
                 <button

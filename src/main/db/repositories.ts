@@ -1,5 +1,6 @@
 // 歌单 / 历史 / 进度 / 歌词缓存 / 歌词偏移 的仓储 CRUD（node:sqlite 同步 API）
 import type {
+  DownloadRecord,
   LyricCacheEntry,
   LyricOffsetEntry,
   PlayHistoryEntry,
@@ -465,12 +466,103 @@ export class LyricOffsetRepository {
   }
 }
 
-export class Repositories {
-  readonly playlists: PlaylistRepository
+// —— DownloadRepository：已下载音频的记录 ——
+export class DownloadRepository {
+  constructor(private db: Db) {}
+
+  /** 写入/更新下载记录（同一 trackId 覆盖） */
+  upsert(rec: DownloadRecord): boolean {
+    const info = this.db
+      .prepare(
+        `INSERT INTO downloads
+          (track_id, bvid, cid, title, artist, cover_url, duration, file_path, file_size, quality, downloaded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(track_id) DO UPDATE SET
+           bvid = excluded.bvid,
+           cid = excluded.cid,
+           title = excluded.title,
+           artist = excluded.artist,
+           cover_url = excluded.cover_url,
+           duration = excluded.duration,
+           file_path = excluded.file_path,
+           file_size = excluded.file_size,
+           quality = excluded.quality,
+           downloaded_at = excluded.downloaded_at`,
+      )
+      .run(
+        rec.trackId,
+        rec.bvid,
+        rec.cid,
+        rec.title,
+        rec.artist,
+        rec.coverUrl,
+        Math.round(rec.duration || 0),
+        rec.filePath,
+        rec.fileSize,
+        rec.quality,
+        rec.downloadedAt,
+      )
+    return Number(info.changes) > 0
+  }
+
+  /** 按下载时间倒序列出全部记录 */
+  list(): DownloadRecord[] {
+    const rows = this.db
+      .prepare('SELECT * FROM downloads ORDER BY downloaded_at DESC')
+      .all() as unknown as DownloadRow[]
+    return rows.map(rowToDownload)
+  }
+
+  get(trackId: string): DownloadRecord | null {
+    const row = this.db.prepare('SELECT * FROM downloads WHERE track_id = ?').get(trackId) as
+      | DownloadRow
+      | undefined
+    return row ? rowToDownload(row) : null
+  }
+
+  /** 删除记录（文件由调用方负责删除） */
+  remove(trackId: string): boolean {
+    const info = this.db.prepare('DELETE FROM downloads WHERE track_id = ?').run(trackId)
+    return Number(info.changes) > 0
+  }
+}
+
+interface DownloadRow {
+  track_id: string
+  bvid: string
+  cid: number
+  title: string
+  artist: string
+  cover_url: string
+  duration: number
+  file_path: string
+  file_size: number
+  quality: string
+  downloaded_at: number
+}
+
+function rowToDownload(r: DownloadRow): DownloadRecord {
+  return {
+    trackId: r.track_id,
+    bvid: r.bvid,
+    cid: r.cid,
+    title: r.title,
+    artist: r.artist,
+    coverUrl: r.cover_url,
+    duration: r.duration,
+    filePath: r.file_path,
+    fileSize: r.file_size,
+    quality: r.quality,
+    downloadedAt: r.downloaded_at,
+  }
+}
+
+export class Repositories {  readonly playlists: PlaylistRepository
   readonly history: HistoryRepository
   readonly progress: ProgressRepository
   readonly lyricCache: LyricCacheRepository
   readonly lyricOffset: LyricOffsetRepository
+  readonly downloads: DownloadRepository
 
   constructor(db: Db = getDb()) {
     this.playlists = new PlaylistRepository(db)
@@ -478,5 +570,6 @@ export class Repositories {
     this.progress = new ProgressRepository(db)
     this.lyricCache = new LyricCacheRepository(db)
     this.lyricOffset = new LyricOffsetRepository(db)
+    this.downloads = new DownloadRepository(db)
   }
 }

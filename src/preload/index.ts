@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { LyricsUpdatePayload, PlayerCommand, RendererApi } from '../shared/ipc'
-import type { AuthState, LogEntry, UpdateStatus } from '../shared/types'
+import type { AuthState, DownloadTask, LogEntry, UpdateStatus } from '../shared/types'
 
 const api: RendererApi = {
   library: {
@@ -66,6 +66,20 @@ const api: RendererApi = {
   window: {
     toggleLyrics: () => ipcRenderer.invoke(IPC.WindowToggleLyrics),
     lyricsVisible: () => ipcRenderer.invoke(IPC.WindowLyricsVisible),
+  },
+  download: {
+    start: (track) => ipcRenderer.invoke(IPC.DownloadStart, { track }),
+    cancel: (trackId) => ipcRenderer.invoke(IPC.DownloadCancel, { trackId }),
+    list: () => ipcRenderer.invoke(IPC.DownloadList),
+    remove: (trackId) => ipcRenderer.invoke(IPC.DownloadRemove, { trackId }),
+    openFolder: () => ipcRenderer.invoke(IPC.DownloadOpenFolder),
+  },
+  onDownloadProgress: (cb) => {
+    const listener = (_e: IpcRendererEvent, task: DownloadTask): void => cb(task)
+    ipcRenderer.on(IPC.DownloadProgress, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.DownloadProgress, listener)
+    }
   },
   onPlayerCommand: (cb) => {
     const listener = (_e: IpcRendererEvent, cmd: PlayerCommand): void => cb(cmd)

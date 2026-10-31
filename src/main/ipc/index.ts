@@ -16,6 +16,7 @@ import type { ImporterRegistry } from '../importer'
 import { registerLibraryHandlers } from './library'
 import { registerBilibiliHandlers } from './bilibili'
 import { registerPlayerHandlers } from './player'
+import { registerDownloadHandlers } from './download'
 
 export interface ServiceDeps {
   repositories: Repositories
@@ -30,6 +31,7 @@ export function registerAllHandlers(deps: ServiceDeps): void {
   registerLibraryHandlers(deps)
   registerBilibiliHandlers(deps)
   registerPlayerHandlers(deps)
+  registerDownloadHandlers(deps)
 
   // 主窗口 → 主进程 → 歌词窗口 的歌词联动中继（同通道 send，来源校验）
   handleSafeOn(IPC.LyricsUpdate, (_e, payload: LyricsUpdatePayload) => {

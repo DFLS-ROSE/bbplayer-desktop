@@ -5,6 +5,7 @@ import { queryClient, useAuthState } from '@renderer/api/client'
 import { useLoginModal } from './LoginModal'
 import { toast } from './ui'
 import {
+  IconDownload,
   IconHistory,
   IconHome,
   IconLibrary,
@@ -17,6 +18,7 @@ const NAV_ITEMS: { to: string; label: string; icon: ComponentType<{ size?: numbe
   { to: '/', label: '首页', icon: IconHome },
   { to: '/search', label: '搜索', icon: IconSearch },
   { to: '/playlists', label: '播放列表', icon: IconLibrary },
+  { to: '/downloads', label: '下载', icon: IconDownload },
   { to: '/history', label: '播放历史', icon: IconHistory },
   { to: '/settings', label: '设置', icon: IconSettings },
 ]

@@ -12,12 +12,16 @@ import { BiliApi } from './bilibili/api'
 import { AuthService } from './bilibili/auth'
 import { LyricsService } from './lyrics/lyrics-service'
 import { createImporterRegistry } from './importer'
-import { createMainWindow, getMainWindow, setQuitting } from './window-manager'
+import { createMainWindow, getMainWindow, sendToMain, setQuitting } from './window-manager'
 import { createTray, destroyTray } from './tray'
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from './global-shortcuts'
 import { initializeLogger, createTraceId, logError, logInfo, logWarn } from './logger'
 import { installSecurityHardening } from './security'
 import { initUpdater } from './updater'
+import { initDownloadManager } from './downloader'
+import { installLocalProtocolHandler, registerLocalScheme } from './local-protocol'
+import { IPC } from '../shared/ipc'
+import { join } from 'node:path'
 import { initSentry } from './sentry'
 
 // 日志尽早可用（异常兜底也依赖它）
@@ -46,6 +50,9 @@ process.on('unhandledRejection', (reason) => {
 let authService: AuthService | null = null
 const renderCrashTimestamps: number[] = []
 let lastAutoReloadAt = 0
+
+// 自定义协议必须在 app ready 之前登记（否则 scheme 不会被当作标准协议）
+registerLocalScheme()
 
 const gotLock = app.requestSingleInstanceLock()
 
@@ -80,8 +87,28 @@ if (!gotLock) {
     const lyricsService = new LyricsService()
     const importers = createImporterRegistry(api)
 
+    // 下载管理器：取流用 api.getPlayUrl（含备用节点与音质偏好），完成后写库
+    const downloadManager = initDownloadManager({
+      resolveUrl: async (bvid, cid) => {
+        const r = await api.getPlayUrl(bvid, cid, appStore.getSettings().audioQuality)
+        return {
+          audioUrl: r.audioUrl,
+          backupUrls: r.backupUrls,
+          quality: r.audioLabel ?? '',
+        }
+      },
+      getDir: () => join(app.getPath('music'), 'BBPlayer'),
+      saveRecord: (rec) => {
+        repositories.downloads.upsert(rec)
+      },
+    })
+    downloadManager.onProgress((task) => {
+      sendToMain(IPC.DownloadProgress, task)
+    })
+
     registerAllHandlers({ repositories, appStore, api, auth, lyricsService, importers })
     installSecurityHardening()
+    installLocalProtocolHandler()
 
     createMainWindow()
     createTray()

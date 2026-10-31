@@ -33,6 +33,8 @@ export interface Track {
   partTitle?: string
   /** 多 P 视频：视频主标题（分 P 列表用） */
   videoTitle?: string
+  /** 已下载到本地：指向本地文件（主进程按此 trackId 提供文件流） */
+  localFileId?: string
 }
 
 // —— 歌单 ——
@@ -71,6 +73,40 @@ export interface PlaybackProgress {
   position: number // 秒
   duration: number // 秒
   updatedAt: number
+}
+
+// —— 已下载的音频 ——
+export interface DownloadRecord {
+  trackId: string
+  bvid: string
+  cid: number
+  title: string
+  artist: string
+  coverUrl: string
+  duration: number
+  /** 本地文件绝对路径（主进程持有） */
+  filePath: string
+  fileSize: number
+  /** 下载时的音质档位，如 192K */
+  quality: string
+  downloadedAt: number
+}
+
+/** 下载任务的实时状态（主进程 → 渲染进程推送） */
+export interface DownloadTask {
+  trackId: string
+  bvid: string
+  cid: number
+  title: string
+  artist: string
+  coverUrl: string
+  duration: number
+  /** 已下载字节 */
+  received: number
+  /** 总字节（服务端未给 Content-Length 时为 0） */
+  total: number
+  status: 'downloading' | 'done' | 'error'
+  error?: string
 }
 
 // —— 播放器状态（Zustand）——

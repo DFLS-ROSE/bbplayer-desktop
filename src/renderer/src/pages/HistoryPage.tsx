@@ -1,9 +1,11 @@
 // 播放历史页
 import { useHistory } from '@renderer/api/client'
 import { TrackList } from '@renderer/components/TrackList'
+import { useDownload } from '@renderer/components/use-download'
 
 export function HistoryPage() {
   const { data: history = [], isLoading } = useHistory(200)
+  const download = useDownload()
 
   return (
     <div className="mx-auto h-full max-w-4xl overflow-y-auto overflow-x-hidden px-6 py-8">
@@ -26,6 +28,7 @@ export function HistoryPage() {
             source: 'search',
           }))}
           emptyText="暂无播放历史"
+          onDownload={(t) => void download(t)}
         />
       )}
     </div>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { ImportResult, Playlist, PlaylistType } from '@shared/types'
 import { queryClient, useAuthState, usePlaylistTracks, usePlaylists } from '@renderer/api/client'
 import { TrackList } from '@renderer/components/TrackList'
+import { useDownload } from '@renderer/components/use-download'
 import { Button, Modal, Spinner, toast } from '@renderer/components/ui'
 import { IconClose } from '@renderer/components/icons'
 
@@ -135,6 +136,7 @@ export function PlaylistPage() {
 
 function PlaylistTracks({ playlistId }: { playlistId: string }) {
   const { data: tracks = [], isLoading } = usePlaylistTracks(playlistId)
+  const download = useDownload()
 
   if (isLoading) {
     return (
@@ -149,6 +151,7 @@ function PlaylistTracks({ playlistId }: { playlistId: string }) {
       tracks={tracks}
       emptyText="歌单为空"
       removable
+      onDownload={(t) => void download(t)}
       onRemove={async (trackId) => {
         const r = await window.api.library.removeTrack(playlistId, trackId)
         if (r.ok) {

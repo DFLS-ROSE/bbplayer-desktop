@@ -8,6 +8,8 @@ import { VideoParts } from '@renderer/components/VideoParts'
 import { ProgressBar, formatTime } from '@renderer/components/ui'
 import {
   IconBack,
+  IconCheck,
+  IconDownload,
   IconLoudness,
   IconNext,
   IconPause,
@@ -17,6 +19,7 @@ import {
   IconRepeatOne,
   IconShuffle,
 } from '@renderer/components/icons'
+import { useDownload, useDownloadedIds } from '@renderer/components/use-download'
 import type { PlayMode } from '@shared/types'
 
 const MODE_ORDER: PlayMode[] = ['sequence', 'loop-all', 'loop-one', 'shuffle']
@@ -30,6 +33,8 @@ export function NowPlayingPage() {
   const loudness = usePlayerStore((s) => s.loudness)
   const navigate = useNavigate()
   const location = useLocation()
+  const download = useDownload()
+  const downloaded = useDownloadedIds()
 
   // 记住「从哪个页面进来的」，返回时回到那里；直接打开本页则回首页
   const fromPath = useRef('/')
@@ -92,6 +97,8 @@ export function NowPlayingPage() {
         <IconBack size={20} />
       </button>
 
+      {/* 下载：与左上返回对称放在右上，不挤占底部控制条 */}
+
       {/* 左：封面 + 信息 + 控制（自身滚动，内容用 margin 垂直居中，空间不足时自动退化为顶部对齐） */}
       <div className="relative z-10 flex w-[44%] min-w-[320px] shrink-0 flex-col overflow-y-auto overflow-x-hidden p-6">
         <div className="my-auto flex flex-col items-center gap-4">
@@ -121,6 +128,29 @@ export function NowPlayingPage() {
                 P{track.partIndex + 1}
                 {track.videoTitle && track.videoTitle !== track.title && ` · ${track.videoTitle}`}
               </p>
+            )}
+            {/* 下载放在标题下方：右上角是歌词工具条（偏移 / 切换来源 / 粘贴），会被它挤住 */}
+            {track && (
+              <div className="mt-3 flex justify-center">
+                {downloaded.matches(track) ? (
+                  <span
+                    title="已下载到本地"
+                    className="flex items-center gap-1 rounded-full bg-[var(--color-accent)]/15 px-3 py-1 text-xs font-medium text-[var(--color-accent)]"
+                  >
+                    <IconCheck size={13} />
+                    已下载
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => void download(track)}
+                    title="下载到本地"
+                    className="flex items-center gap-1 rounded-full bg-black/5 px-3 py-1 text-xs text-[var(--color-text-secondary)] transition hover:bg-black/10 hover:text-[var(--color-text-primary)] dark:bg-white/10 dark:hover:bg-white/20"
+                  >
+                    <IconDownload size={13} />
+                    下载
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

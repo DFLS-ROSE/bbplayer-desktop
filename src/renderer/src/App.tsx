@@ -25,12 +25,14 @@ const HistoryPage = lazy(() => import('./pages/HistoryPage').then((m) => ({ defa
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 const NowPlayingPage = lazy(() => import('./pages/NowPlayingPage').then((m) => ({ default: m.NowPlayingPage })))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
+const DownloadsPage = lazy(() => import('./pages/DownloadsPage').then((m) => ({ default: m.DownloadsPage })))
 
 /** 路由表：路径 → 页面组件（顺序即叠放层级，后面的盖在上面） */
 const PAGES: { path: string; Element: ComponentType }[] = [
   { path: '/', Element: HomePage },
   { path: '/search', Element: SearchPage },
   { path: '/playlists', Element: PlaylistPage },
+  { path: '/downloads', Element: DownloadsPage },
   { path: '/history', Element: HistoryPage },
   { path: '/settings', Element: SettingsPage },
   { path: '/now-playing', Element: NowPlayingPage },

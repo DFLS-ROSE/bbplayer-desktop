@@ -3,6 +3,8 @@
 // ============================================================================
 import type {
   AuthState,
+  DownloadRecord,
+  DownloadTask,
   FavoriteData,
   ImportResult,
   LyricCandidate,
@@ -81,6 +83,12 @@ export const IPC = {
   // window control
   WindowToggleLyrics: 'window:toggleLyrics',
   WindowLyricsVisible: 'window:lyricsVisible',
+  // download（音频下载到本地）
+  DownloadStart: 'download:start',
+  DownloadCancel: 'download:cancel',
+  DownloadList: 'download:list',
+  DownloadRemove: 'download:remove',
+  DownloadOpenFolder: 'download:openFolder',
   // logging
   LogWrite: 'log:write',
   // updater（GitHub Releases）
@@ -93,6 +101,7 @@ export const IPC = {
   LyricsUpdate: 'lyrics:update',
   BiliAuthChanged: 'bili:authChanged',
   AppUpdateStatus: 'app:updateStatus',
+  DownloadProgress: 'download:progress',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -159,6 +168,11 @@ export interface IpcRequestMap {
   [IPC.Import]: { source: 'netease' | 'qq'; url: string }
   [IPC.WindowToggleLyrics]: undefined
   [IPC.WindowLyricsVisible]: undefined
+  [IPC.DownloadStart]: { track: Track }
+  [IPC.DownloadCancel]: { trackId: string }
+  [IPC.DownloadList]: undefined
+  [IPC.DownloadRemove]: { trackId: string }
+  [IPC.DownloadOpenFolder]: undefined
   [IPC.LogWrite]: LogEntry
   [IPC.AppGetVersion]: undefined
   [IPC.AppCheckStableUpdate]: undefined
@@ -253,6 +267,18 @@ export interface RendererApi {
     /** 桌面歌词悬浮窗当前是否可见 */
     lyricsVisible(): Promise<Result<boolean>>
   }
+  download: {
+    /** 加入下载队列 */
+    start(track: Track): Promise<Result<boolean>>
+    cancel(trackId: string): Promise<Result<boolean>>
+    /** 已完成下载的记录 */
+    list(): Promise<Result<DownloadRecord[]>>
+    /** 删除下载记录与本地文件 */
+    remove(trackId: string): Promise<Result<boolean>>
+    /** 打开下载目录 */
+    openFolder(): Promise<Result<boolean>>
+  }
+  onDownloadProgress(cb: (task: DownloadTask) => void): () => void
   onPlayerCommand(cb: (cmd: PlayerCommand) => void): () => void
   onLyricsUpdate(cb: (payload: LyricsUpdatePayload) => void): () => void
   onAuthChanged(cb: (state: AuthState) => void): () => void

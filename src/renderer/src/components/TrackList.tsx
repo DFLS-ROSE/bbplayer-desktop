@@ -8,16 +8,27 @@ import { Button, Modal, formatTime, toast } from './ui'
 import { IconCheck, IconClose, IconDownload, IconPause, IconPlay, IconPlus } from './icons'
 import { useDownload, useDownloadedIds } from './use-download'
 
+/** 批量操作：歌单页用它把「加入歌单」换成「删除」 */
+export interface BatchAction {
+  label: string
+  onClick: (tracks: Track[]) => void
+  tone?: 'primary' | 'danger'
+}
+
 interface Props {
   tracks: Track[]
   emptyText?: string
   onPlay?: (index: number) => void
   removable?: boolean
   onRemove?: (trackId: string) => void
-  /** 是否显示「批量添加」入口（默认开启） */
+  /** 是否显示「批量」入口（默认开启） */
   selectable?: boolean
   /** 自定义下载行为；不传则用默认的下载流程（默认就有下载按钮） */
   onDownload?: (track: Track) => void
+  /** 是否允许「加入歌单」：行内 + 按钮与批量的主操作。默认 true */
+  addable?: boolean
+  /** 多选时的主操作，不传则是「加入歌单」 */
+  batchAction?: BatchAction
 }
 
 export function TrackList({
@@ -28,6 +39,8 @@ export function TrackList({
   onRemove,
   selectable = true,
   onDownload,
+  addable = true,
+  batchAction,
 }: Props) {
   const current = usePlayerStore((s) => s.currentTrack)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
@@ -37,6 +50,8 @@ export function TrackList({
   const [addTarget, setAddTarget] = useState<Track[] | null>(null)
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
+  /** 没有加入歌单也没有自定义批量操作时，多选没有意义 */
+  const canBatch = selectable && (addable || !!batchAction)
 
   if (tracks.length === 0) {
     return <div className="py-16 text-center text-sm text-[var(--color-text-secondary)]">{emptyText}</div>
@@ -67,7 +82,7 @@ export function TrackList({
 
   return (
     <>
-      {selectable && tracks.length > 1 && (
+      {canBatch && tracks.length > 1 && (
         <div className="sticky top-0 z-10 mb-1 flex h-9 items-center justify-end gap-3 bg-[var(--color-bg)]/85 text-xs backdrop-blur">
           {selecting ? (
             <>
@@ -82,16 +97,22 @@ export function TrackList({
               <button
                 disabled={selectedTracks.length === 0}
                 onClick={() => {
-                  setAddTarget(selectedTracks)
+                  if (batchAction) {
+                    batchAction.onClick(selectedTracks)
+                  } else {
+                    setAddTarget(selectedTracks)
+                  }
                   exitSelect()
                 }}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  selectedTracks.length > 0
-                    ? 'bg-[var(--color-accent)] text-white hover:opacity-90'
-                    : 'cursor-not-allowed bg-black/5 text-[var(--color-text-secondary)] opacity-60 dark:bg-white/10'
+                  selectedTracks.length === 0
+                    ? 'cursor-not-allowed bg-black/5 text-[var(--color-text-secondary)] opacity-60 dark:bg-white/10'
+                    : batchAction?.tone === 'danger'
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'bg-[var(--color-accent)] text-white hover:opacity-90'
                 }`}
               >
-                加入歌单
+                {batchAction?.label ?? '加入歌单'}
               </button>
               <button
                 className="text-[var(--color-text-secondary)] transition hover:opacity-80"
@@ -104,10 +125,12 @@ export function TrackList({
             <button
               className="flex items-center gap-1 text-[var(--color-text-secondary)] transition hover:text-[var(--color-accent)]"
               onClick={() => setSelecting(true)}
-              title="勾选多首后一次性加入歌单"
+              title={
+                batchAction ? `勾选多首后一次性${batchAction.label}` : '勾选多首后一次性加入歌单'
+              }
             >
               <IconCheck size={13} />
-              批量添加
+              {batchAction ? `批量${batchAction.label}` : '批量添加'}
             </button>
           )}
         </div>
@@ -198,16 +221,18 @@ export function TrackList({
                       <IconDownload size={15} />
                     </button>
                   )}
-                  <button
-                    className="shrink-0 rounded p-1.5 text-[var(--color-text-secondary)] opacity-0 transition hover:bg-black/5 group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setAddTarget([t])
-                    }}
-                    title="加入歌单"
-                  >
-                    <IconPlus size={15} />
-                  </button>
+                  {addable && (
+                    <button
+                      className="shrink-0 rounded p-1.5 text-[var(--color-text-secondary)] opacity-0 transition hover:bg-black/5 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setAddTarget([t])
+                      }}
+                      title="加入歌单"
+                    >
+                      <IconPlus size={15} />
+                    </button>
+                  )}
                 </>
               )}
               {removable && onRemove && (

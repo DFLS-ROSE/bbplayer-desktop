@@ -63,6 +63,10 @@ class AudioEngine {
     if (!track || this.sources.length === 0 || this.failedCompletely) return
 
     const failedUrl = this.sources[this.sourceIndex] ?? ''
+    // 迟到的错误：元素上已经是另一个地址（上一次加载被新的一次取代了），
+    // 拿它去切新曲目的候选会把正常地址跳过，甚至误判「全部不可用」
+    const liveSrc = this.audio.currentSrc || this.audio.src
+    if (failedUrl && liveSrc && liveSrc !== failedUrl) return
     // 切源前记住播放进度，避免换节点后从头开始
     if (Number.isFinite(this.audio.currentTime) && this.audio.currentTime > 1) {
       this.resumeAt = this.audio.currentTime
@@ -180,6 +184,10 @@ class AudioEngine {
     if (!resolved.cid) {
       try {
         const r = await window.api.bili.getVideo(resolved.bvid)
+        // 等待期间用户可能又点了别的歌：这次请求作废。
+        // 少了这步，迟到的解析结果会把 currentTrack 改回旧歌，
+        // 表现就是「换了歌，但信息/音频还是上一首」。
+        if (token !== this.restoreToken) return
         if (r.ok) {
           const pages = r.data.pages ?? []
           const first = pages[0]
@@ -219,7 +227,14 @@ class AudioEngine {
     } else if (resolved.audioUrl) sources = buildSourceList(resolved.audioUrl, [])
     else {
       const r = await window.api.bili.playUrl(resolved.bvid, resolved.cid)
-      if (!r.ok) throw new Error(r.error.message)
+      if (token !== this.restoreToken) return
+      if (!r.ok) {
+        // 取流失败：元素上还留着上一首（界面已经是新曲目了），必须停下来，
+        // 否则就成了「换了歌但声音还在放上一首」。以前这里直接 throw，
+        // 调用方都是 void engine.playTrack(...)，错误被吞掉，旧音频就这么一直播着。
+        this.failCurrent(new Error(r.error.message))
+        return
+      }
       sources = buildSourceList(r.data.audioUrl, r.data.backupUrls)
       resolved = { ...resolved, audioUrl: r.data.audioUrl }
       if (r.data.duration) store.setDuration(r.data.duration)
@@ -232,6 +247,7 @@ class AudioEngine {
     // 断点续播
     let startAt = 0
     const progress = await window.api.progress.get(resolved.id)
+    if (token !== this.restoreToken) return
     if (progress.ok && progress.data) {
       const dur = progress.data.duration || resolved.duration
       if (progress.data.position > 3 && (dur === 0 || progress.data.position < dur - 5)) {
@@ -250,6 +266,7 @@ class AudioEngine {
 
     try {
       await this.ensureAudioGraph()
+      if (token !== this.restoreToken) return
       await this.audio.play()
     } catch (e) {
       usePlayerStore.getState().setPlaying(false)
@@ -265,8 +282,26 @@ class AudioEngine {
         })
       }
     }
+    if (token !== this.restoreToken) return
     void this.recordHistory(resolved)
     void this.saveSession()
+  }
+
+  /** 切歌失败：停掉残留的上一首，清空候选地址并提示用户 */
+  private failCurrent(e: unknown): void {
+    const message = e instanceof Error ? e.message : String(e)
+    this.audio.pause()
+    this.sources = []
+    this.sourceIndex = 0
+    this.resumeAt = 0
+    usePlayerStore.getState().setPlaying(false)
+    void window.api.log({
+      level: 'warn',
+      scope: 'audio',
+      message: '切歌失败',
+      extra: { error: message, trackId: usePlayerStore.getState().currentTrack?.id },
+    })
+    toast(`这首暂时播放不了：${message}`, 'error')
   }
 
   /** 应用解析后的曲目：更新 currentTrack 并同步回队列，避免下次点击队列重复解析 */
@@ -324,7 +359,9 @@ class AudioEngine {
 
   /** 播放前恢复 Web Audio 图（响度均衡），播放后同步 store；失败时回滚为暂停态 */
   private async resumeAndPlay(): Promise<void> {
-    const token = ++this.restoreToken
+    // 这里只「观察」令牌、不递增：递增会把正在加载的新曲目请求一并作废，
+    // 症状就是点了新歌、界面换了，声音却还是上一首（加载被中途取消）
+    const token = this.restoreToken
 
     try {
       await this.ensureAudioGraph()
@@ -367,13 +404,20 @@ class AudioEngine {
     const store = usePlayerStore.getState()
     const track = store.currentTrack
     if (!track || !this.audio.src) return
+    const token = this.restoreToken
     const wasPlaying = !this.audio.paused
-    this.resumeAt = Number.isFinite(this.audio.currentTime) ? this.audio.currentTime : 0
+    const resumeAt = Number.isFinite(this.audio.currentTime) ? this.audio.currentTime : 0
 
     const r = await window.api.bili.playUrl(track.bvid, track.cid)
+    // 等待期间切歌了：这份地址属于上一首，套上去会把新曲目顶掉（换歌却还在放旧歌）
+    if (token !== this.restoreToken || usePlayerStore.getState().currentTrack?.id !== track.id) return
     if (!r.ok) return
     const sources = buildSourceList(r.data.audioUrl, r.data.backupUrls)
     if (sources.length === 0) return
+    // 取地址期间用户可能已经按了暂停：这里在换源前判定意图（换源本身也会让元素停止播放，
+    // 放到 applySource 之后判就永远判成「暂停」了）
+    const shouldPlay = wasPlaying && usePlayerStore.getState().isPlaying
+    this.resumeAt = resumeAt
 
     this.sources = sources
     this.sourceIndex = 0
@@ -381,7 +425,7 @@ class AudioEngine {
     this.failedCompletely = false
     store.setAudioLabel(r.data.audioLabel ?? '')
     this.applySource()
-    if (wasPlaying) {
+    if (shouldPlay) {
       try {
         await this.audio.play()
       } catch {

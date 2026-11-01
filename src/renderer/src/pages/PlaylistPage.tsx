@@ -1,8 +1,10 @@
 // 播放列表页：本地歌单 CRUD / 收藏夹 / 订阅合集 / 外部歌单导入
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ImportResult, Playlist, PlaylistType } from '@shared/types'
+import type { ImportResult, Playlist, PlaylistType, Track } from '@shared/types'
 import { queryClient, useAuthState, usePlaylistTracks, usePlaylists } from '@renderer/api/client'
+import { engine } from '@renderer/audio/audio-engine'
+import { usePlayerStore } from '@renderer/store/player-store'
 import { TrackList } from '@renderer/components/TrackList'
 import { useDownload } from '@renderer/components/use-download'
 import { Button, Modal, Spinner, toast } from '@renderer/components/ui'
@@ -113,15 +115,7 @@ export function PlaylistPage() {
       {/* 右侧曲目（不用 <main>：页面栈里 App 已有一个 main，嵌套 main 是无效 HTML） */}
       <section className="min-w-0 flex-1 overflow-y-auto p-4">
         {selected ? (
-          <>
-            <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-base font-semibold">{selected.name}</h2>
-              <span className="rounded bg-black/5 px-2 py-0.5 text-xs text-[var(--color-text-secondary)] dark:bg-white/10">
-                {TYPE_LABELS[selected.type]}
-              </span>
-            </div>
-            <PlaylistTracks playlistId={selected.id} />
-          </>
+          <PlaylistDetail playlist={selected} />
         ) : (
           <div className="py-16 text-center text-sm text-[var(--color-text-secondary)]">
             选择或新建一个歌单
@@ -134,34 +128,92 @@ export function PlaylistPage() {
   )
 }
 
-function PlaylistTracks({ playlistId }: { playlistId: string }) {
-  const { data: tracks = [], isLoading } = usePlaylistTracks(playlistId)
+function PlaylistDetail({ playlist }: { playlist: Playlist }) {
+  const { data: tracks = [], isLoading } = usePlaylistTracks(playlist.id)
   const download = useDownload()
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-10">
-        <Spinner />
-      </div>
-    )
+  /** 从歌单开始播：队列整体换成这个歌单，不是追加到原有队列后面 */
+  const playAll = (): void => {
+    const first = tracks[0]
+    if (!first) return
+    void engine.playTrack(first, tracks, 0)
+  }
+
+  /** 随机播放：打乱队列 + 切到随机模式，之后「下一首」也是随机的 */
+  const playShuffle = (): void => {
+    if (tracks.length === 0) return
+    const shuffled = [...tracks]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const tmp = shuffled[i]
+      shuffled[i] = shuffled[j]
+      shuffled[j] = tmp
+    }
+    usePlayerStore.getState().setMode('shuffle')
+    void engine.playTrack(shuffled[0], shuffled, 0)
+  }
+
+  const removeOne = async (trackId: string): Promise<void> => {
+    const r = await window.api.library.removeTrack(playlist.id, trackId)
+    if (r.ok) {
+      await queryClient.invalidateQueries({ queryKey: ['playlist-tracks', playlist.id] })
+      await queryClient.invalidateQueries({ queryKey: ['playlists'] })
+    } else {
+      toast(r.error.message, 'error')
+    }
+  }
+
+  const removeMany = async (targets: Track[]): Promise<void> => {
+    let failed = 0
+    for (const t of targets) {
+      const r = await window.api.library.removeTrack(playlist.id, t.id)
+      if (!r.ok) failed += 1
+    }
+    await queryClient.invalidateQueries({ queryKey: ['playlist-tracks', playlist.id] })
+    await queryClient.invalidateQueries({ queryKey: ['playlists'] })
+    if (failed > 0) toast(`已删除 ${targets.length - failed} 首，${failed} 首失败`, 'error')
+    else toast(`已删除 ${targets.length} 首`, 'success')
   }
 
   return (
-    <TrackList
-      tracks={tracks}
-      emptyText="歌单为空"
-      removable
-      onDownload={(t) => void download(t)}
-      onRemove={async (trackId) => {
-        const r = await window.api.library.removeTrack(playlistId, trackId)
-        if (r.ok) {
-          await queryClient.invalidateQueries({ queryKey: ['playlist-tracks', playlistId] })
-          await queryClient.invalidateQueries({ queryKey: ['playlists'] })
-        } else {
-          toast(r.error.message, 'error')
-        }
-      }}
-    />
+    <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h2 className="text-base font-semibold">{playlist.name}</h2>
+        <span className="rounded bg-black/5 px-2 py-0.5 text-xs text-[var(--color-text-secondary)] dark:bg-white/10">
+          {TYPE_LABELS[playlist.type]}
+        </span>
+        <span className="text-xs text-[var(--color-text-secondary)]">{tracks.length} 首</span>
+        <div className="ml-auto flex gap-2">
+          <Button variant="secondary" onClick={playAll} disabled={tracks.length === 0}>
+            播放全部
+          </Button>
+          <Button onClick={playShuffle} disabled={tracks.length === 0}>
+            随机播放
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Spinner />
+        </div>
+      ) : (
+        <TrackList
+          tracks={tracks}
+          emptyText="歌单为空"
+          removable
+          addable={false}
+          batchAction={{ label: '删除', tone: 'danger', onClick: (ts) => void removeMany(ts) }}
+          onDownload={(t) => void download(t)}
+          // 点歌单里的任意一首：队列换成整个歌单（从这首开始），不是塞进原队列
+          onPlay={(index) => {
+            const t = tracks[index]
+            if (t) void engine.playTrack(t, tracks, index)
+          }}
+          onRemove={(trackId) => void removeOne(trackId)}
+        />
+      )}
+    </>
   )
 }
 

@@ -386,12 +386,14 @@ function LyricLineRow({
   lineRef?: RefObject<HTMLDivElement>
   onAlign?: (line: LyricLine) => void
 }) {
+  // 过渡只针对这几项视觉属性：用 transition-all 会把 visibility 也算进去，
+  // 页面被隐藏时要等 500ms 才真正生效，切走歌词会残留在别的页面上
   return (
     <div
       ref={lineRef}
       onClick={() => onAlign?.(line)}
       title={onAlign ? '点击：把这一行对齐到当前播放位置' : undefined}
-      className={`cursor-pointer transition-all duration-500 ${
+      className={`cursor-pointer transition-[color,opacity,font-size] duration-500 ${
         active
           ? 'font-semibold text-[var(--color-accent)] text-[clamp(1rem,2.4vh,1.5rem)]'
           : 'text-[var(--color-text-secondary)] opacity-55 text-[clamp(0.8rem,2vh,1.2rem)]'

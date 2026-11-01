@@ -10,7 +10,7 @@ import { toast } from '@renderer/components/ui'
 import { AUDIO_QUALITY_OPTIONS, type AudioQualityPref } from '@shared/audio-quality'
 import { formatOffset } from '@shared/lyrics-offset'
 import i18n, { SUPPORTED_LANGUAGES } from '@renderer/i18n'
-import type { LyricOffsetEntry, ReleaseInfo, StableUpdateResult, UpdateStatus } from '@shared/types'
+import type { LyricOffsetEntry, StableUpdateResult, UpdateStatus } from '@shared/types'
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -249,7 +249,6 @@ export function SettingsPage() {
       </Section>
 
       <CheckUpdateSection />
-      <VersionListSection />
     </div>
   )
 }
@@ -416,93 +415,6 @@ function CheckUpdateSection() {
           {downloading ? '下载中…' : '下载并安装最新稳定版'}
         </button>
       )}
-    </Section>
-  )
-}
-
-function VersionListSection() {
-  const [versions, setVersions] = useState<ReleaseInfo[]>([])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [downloadingTag, setDownloadingTag] = useState<string | null>(null)
-
-  const refresh = async (): Promise<void> => {
-    setBusy(true)
-    const r = await window.api.listVersions()
-    if (r.ok) {
-      setVersions(r.data)
-      setError(null)
-    } else {
-      setError(r.error.message)
-    }
-    setBusy(false)
-  }
-
-  useEffect(() => {
-    void refresh()
-  }, [])
-
-  const download = async (tag: string): Promise<void> => {
-    setDownloadingTag(tag)
-    const r = await window.api.downloadVersion(tag)
-    if (!r.ok) toast(`下载失败：${r.error.message}`, 'error')
-    setDownloadingTag(null)
-  }
-
-  const fmtSize = (n?: number): string => (n ? `${(n / 1024 / 1024).toFixed(1)} MB` : '')
-
-  return (
-    <Section title="选择版本">
-      <div className="mb-3 flex items-center justify-between text-sm">
-        <span className="text-xs text-[var(--color-text-secondary)]">
-          列出所有已发布版本（含测试版），可选择性下载安装
-        </span>
-        <button
-          onClick={() => void refresh()}
-          disabled={busy}
-          className="rounded-full bg-black/10 px-3 py-1 text-xs hover:bg-black/15 disabled:opacity-50 dark:bg-white/10 dark:hover:bg-white/15"
-        >
-          {busy ? '加载中…' : '刷新'}
-        </button>
-      </div>
-
-      {error && <div className="mb-3 text-xs text-amber-600 dark:text-amber-400">加载失败：{error}</div>}
-
-      {versions.length === 0 && !error && !busy && (
-        <div className="text-xs text-[var(--color-text-secondary)]">暂无可用版本</div>
-      )}
-
-      <div className="flex flex-col gap-2">
-        {versions.map((v) => (
-          <div
-            key={v.tag}
-            className="flex items-center justify-between rounded-lg bg-black/5 px-3 py-2 text-sm dark:bg-white/5"
-          >
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{v.name || v.tag}</span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] ${
-                  v.prerelease
-                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                    : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                }`}
-              >
-                {v.prerelease ? '测试版' : '稳定版'}
-              </span>
-              {v.size != null && (
-                <span className="text-xs text-[var(--color-text-secondary)]">{fmtSize(v.size)}</span>
-              )}
-            </div>
-            <button
-              onClick={() => void download(v.tag)}
-              disabled={downloadingTag === v.tag}
-              className="rounded-full bg-black/10 px-3 py-1 text-xs hover:bg-black/15 disabled:opacity-50 dark:bg-white/10 dark:hover:bg-white/15"
-            >
-              {downloadingTag === v.tag ? '下载中…' : '下载安装'}
-            </button>
-          </div>
-        ))}
-      </div>
     </Section>
   )
 }

@@ -1,5 +1,6 @@
 // 通用 UI：Modal / Toast / Button / Spinner / ProgressBar / 时间格式化
-import type { ReactNode } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import { useRef, useState } from 'react'
 import { create } from 'zustand'
 import { IconClose } from './icons'
 
@@ -134,23 +135,83 @@ export function ProgressBar(props: {
   max: number
   onSeek?: (v: number) => void
   className?: string
+  /** 显示可拖动的圆点（底部播放栏 / 歌词页用） */
+  thumb?: boolean
 }) {
-  const { value, max, onSeek, className = '' } = props
-  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
+  const { value, max, onSeek, className = '', thumb = true } = props
+  // 拖动期间只更新本地预览，松手才真正 seek —— 边拖边 seek 会把远端流反复打断
+  const [dragValue, setDragValue] = useState<number | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  const ratioAt = (clientX: number): number => {
+    const el = rootRef.current
+    if (!el || max <= 0) return 0
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0) return 0
+    return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+  }
+
+  const shown = dragValue ?? value
+  const pct = max > 0 ? Math.min(100, Math.max(0, (shown / max) * 100)) : 0
+  const dragging = dragValue != null
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    if (!onSeek || max <= 0) return
+    e.preventDefault()
+    // 捕获指针：拖到条外面（甚至窗口边缘）也继续跟手（个别环境不支持，忽略即可）
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* 没有活动指针时（如合成事件）会抛错，退化成普通拖动 */
+    }
+    setDragValue(ratioAt(e.clientX) * max)
+  }
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    if (!dragging) return
+    setDragValue(ratioAt(e.clientX) * max)
+  }
+
+  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    if (!dragging) return
+    const target = ratioAt(e.clientX) * max
+    setDragValue(null)
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* 指针已释放时忽略 */
+    }
+    onSeek?.(target)
+  }
+
   return (
     <div
-      className={`group relative h-1.5 cursor-pointer rounded-full bg-black/10 dark:bg-white/15 ${className}`}
-      onClick={(e) => {
-        if (!onSeek) return
-        const rect = e.currentTarget.getBoundingClientRect()
-        const ratio = (e.clientX - rect.left) / rect.width
-        onSeek(ratio * max)
-      }}
+      ref={rootRef}
+      className={`group relative h-1.5 rounded-full bg-black/10 dark:bg-white/15 ${
+        onSeek ? 'cursor-pointer' : ''
+      } ${className}`}
+      style={{ touchAction: 'none' }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onLostPointerCapture={() => setDragValue(null)}
     >
       <div
         className="absolute inset-y-0 left-0 rounded-full bg-[var(--color-accent)]"
         style={{ width: `${pct}%` }}
       />
+      {thumb && (
+        <span
+          className={`pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] transition-[width,height] ${
+            dragging ? 'h-3 w-3' : 'h-2.5 w-2.5 group-hover:h-3 group-hover:w-3'
+          }`}
+          style={{ left: `${pct}%`, boxShadow: '0 0 0 2px var(--color-surface, #fff)' }}
+          aria-hidden="true"
+        />
+      )}
+      {/* 透明热区：条本身只有 6px 高，直接点很难命中；不占布局高度 */}
+      {onSeek && <div className="absolute -inset-x-1 -inset-y-2" />}
     </div>
   )
 }

@@ -8,6 +8,9 @@ import type { SessionContext, Track } from '@shared/types'
 
 type AudioCtor = typeof AudioContext
 
+/** 「上一首」在播放满这么多秒后先回到本曲开头，再按一次才切上一首 */
+const PREV_RESTART_SECONDS = 3
+
 class AudioEngine {
   private audio: HTMLAudioElement
   private audioCtx: AudioContext | null = null
@@ -28,6 +31,8 @@ class AudioEngine {
   private refetchedUrls = false
   /** 本轮播放是否已经判定彻底失败（play() 的 rejection 与 error 事件会各触发一次，避免重复提示） */
   private failedCompletely = false
+  /** 连续播放失败次数：达到队列长度就停止自动跳歌，避免整队失效时无限跳 */
+  private consecutiveFailures = 0
 
   constructor() {
     this.audio = new Audio()
@@ -40,6 +45,10 @@ class AudioEngine {
     this.audio.addEventListener('loadedmetadata', () => this.syncDuration())
     this.audio.addEventListener('durationchange', () => this.syncDuration())
     this.audio.addEventListener('play', () => usePlayerStore.getState().setPlaying(true))
+    // 真正开始出声才算这首正常，连续失败计数在这里清零
+    this.audio.addEventListener('playing', () => {
+      this.consecutiveFailures = 0
+    })
     this.audio.addEventListener('pause', () => {
       usePlayerStore.getState().setPlaying(false)
       void this.saveProgress()
@@ -132,7 +141,7 @@ class AudioEngine {
       }
     }
 
-    // 3. 彻底失败：明确告知用户，不要在元素上留下半死状态
+    // 3. 彻底失败：交给统一的失败处理（会停掉残留音频，队列有下一首就自动跳过去）
     this.failedCompletely = true
     void window.api.log({
       level: 'error',
@@ -140,7 +149,7 @@ class AudioEngine {
       message: '所有播放源均不可用',
       extra: { mediaError: errCode, trackId: track.id },
     })
-    toast('这首暂时播放不了（B 站 CDN 节点异常），稍后重试或换一首', 'error')
+    this.failCurrent(new Error('B 站 CDN 节点异常，所有播放源均不可用'))
   }
 
   /** 把当前候选地址装载到 audio 元素上 */
@@ -287,7 +296,10 @@ class AudioEngine {
     void this.saveSession()
   }
 
-  /** 切歌失败：停掉残留的上一首，清空候选地址并提示用户 */
+  /**
+   * 播放失败：停掉残留音频并清理状态；队列里还有下一首就自动跳过去
+   * （连续失败达到队列长度时停下，否则整队都放不出来时会无限跳歌）
+   */
   private failCurrent(e: unknown): void {
     const message = e instanceof Error ? e.message : String(e)
     this.audio.pause()
@@ -298,10 +310,50 @@ class AudioEngine {
     void window.api.log({
       level: 'warn',
       scope: 'audio',
-      message: '切歌失败',
+      message: '播放失败',
       extra: { error: message, trackId: usePlayerStore.getState().currentTrack?.id },
     })
+
+    this.consecutiveFailures += 1
+    const next = this.nextAfterFailure()
+    if (next) {
+      toast(`这首播放失败，已跳到「${truncate(next.track.title)}」`, 'error')
+      void this.playTrack(next.track, usePlayerStore.getState().queue, next.index)
+      return
+    }
     toast(`这首暂时播放不了：${message}`, 'error')
+  }
+
+  /** 失败后要跳的下一首；没有下一首或连续失败过多则返回 null */
+  private nextAfterFailure(): { track: Track; index: number } | null {
+    const s = usePlayerStore.getState()
+    const q = s.queue
+    if (q.length <= 1) return null
+    if (this.consecutiveFailures >= q.length) {
+      // 整队都试过一遍了，别再跳——否则就是一秒一首地刷
+      void window.api.log({
+        level: 'error',
+        scope: 'audio',
+        message: '连续多首播放失败，停止自动跳转',
+        extra: { count: this.consecutiveFailures },
+      })
+      toast('连续多首无法播放，已停止（可能是网络或 B 站节点异常）', 'error')
+      return null
+    }
+    let idx: number
+    if (s.mode === 'shuffle') {
+      idx = Math.floor(Math.random() * q.length)
+      if (idx === s.queueIndex) idx = (idx + 1) % q.length
+    } else {
+      idx = s.queueIndex + 1
+      if (idx >= q.length) {
+        // 只有列表循环会绕回开头；其它模式视为「没有下一首」
+        if (s.mode !== 'loop-all') return null
+        idx = 0
+      }
+    }
+    const track = q[idx]
+    return track ? { track, index: idx } : null
   }
 
   /** 应用解析后的曲目：更新 currentTrack 并同步回队列，避免下次点击队列重复解析 */
@@ -466,7 +518,16 @@ class AudioEngine {
     this.advance(1)
   }
 
+  /**
+   * 上一首：先回到本曲 00:00；开局 3 秒内（或已经回到开头后）再按一次才切上一首。
+   * 和主流播放器一致 —— 想重听当前这首时不会一不小心被切走。
+   */
   prev(): void {
+    const position = this.audio.currentTime
+    if (Number.isFinite(position) && position > PREV_RESTART_SECONDS) {
+      this.seek(0)
+      return
+    }
     this.advance(-1)
   }
 
@@ -490,6 +551,12 @@ class AudioEngine {
   private onEnded(): void {
     const s = usePlayerStore.getState()
     void this.saveProgress()
+    // 单条播放：播完就停，不续下一首（回到开头，方便再按一次重播）
+    if (s.mode === 'single') {
+      this.audio.currentTime = 0
+      usePlayerStore.getState().setPlaying(false)
+      return
+    }
     if (s.mode === 'loop-one') {
       this.audio.currentTime = 0
       this.audio.play().catch(() => this.startCurrent())
@@ -589,3 +656,9 @@ class AudioEngine {
 }
 
 export const engine = new AudioEngine()
+
+/** 提示文案里的曲名截断，避免长标题把 toast 撑开 */
+function truncate(text: string, max = 12): string {
+  const t = text.trim()
+  return t.length > max ? `${t.slice(0, max)}…` : t
+}

@@ -14,6 +14,7 @@ import {
   IconNext,
   IconPause,
   IconPlay,
+  IconPlayOnce,
   IconPrev,
   IconQueue,
   IconRepeat,
@@ -21,7 +22,7 @@ import {
   IconShuffle,
 } from './icons'
 
-const MODE_ORDER: PlayMode[] = ['sequence', 'loop-all', 'loop-one', 'shuffle']
+const MODE_ORDER: PlayMode[] = ['sequence', 'single', 'loop-one', 'loop-all', 'shuffle']
 
 export function PlayerBar() {
   const navigate = useNavigate()
@@ -100,6 +101,8 @@ export function PlayerBar() {
           <ControlBtn label={modeLabel} onClick={cycleMode} active={mode !== 'sequence'}>
             {mode === 'shuffle' ? (
               <IconShuffle />
+            ) : mode === 'single' ? (
+              <IconPlayOnce />
             ) : mode === 'loop-one' ? (
               <IconRepeatOne />
             ) : (

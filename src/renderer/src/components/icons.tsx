@@ -80,6 +80,14 @@ export const IconRepeatOne = (p: IconProps) => (
   </Svg>
 )
 
+/** 单条播放：三角形 + 数字 1（只播这一首）。刻意不用竖线，否则和「下一首」的 ▶| 撞脸 */
+export const IconPlayOnce = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 5.8v12.4l8.8-6.2L5 5.8z" fill="currentColor" stroke="none" />
+    <path d="M16.4 9.6l1.7-1.3v7.4" />
+  </Svg>
+)
+
 export const IconVolume = (p: IconProps) => (
   <Svg {...p}>
     <path d="M11 5 6 9H2v6h4l5 4V5z" />

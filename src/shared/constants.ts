@@ -27,9 +27,10 @@ export const BILI_MIN_INTERVAL_MS = 150
 // —— 登录态探活 ——
 export const AUTH_PROBE_INTERVAL_MS = 5 * 60_000
 
-// 播放模式（顺序 / 单曲 / 列表 / 随机）
+// 播放模式（顺序 / 单条 / 单曲 / 列表 / 随机）
 export const PLAY_MODES: { value: PlayMode; label: string }[] = [
   { value: 'sequence', label: '顺序播放' },
+  { value: 'single', label: '单条播放' },
   { value: 'loop-one', label: '单曲循环' },
   { value: 'loop-all', label: '列表循环' },
   { value: 'shuffle', label: '随机播放' },

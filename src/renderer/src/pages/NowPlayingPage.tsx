@@ -14,6 +14,7 @@ import {
   IconNext,
   IconPause,
   IconPlay,
+  IconPlayOnce,
   IconPrev,
   IconRepeat,
   IconRepeatOne,
@@ -22,7 +23,7 @@ import {
 import { useDownload, useDownloadedIds } from '@renderer/components/use-download'
 import type { PlayMode } from '@shared/types'
 
-const MODE_ORDER: PlayMode[] = ['sequence', 'loop-all', 'loop-one', 'shuffle']
+const MODE_ORDER: PlayMode[] = ['sequence', 'single', 'loop-one', 'loop-all', 'shuffle']
 
 export function NowPlayingPage() {
   const track = usePlayerStore((s) => s.currentTrack)
@@ -66,6 +67,8 @@ export function NowPlayingPage() {
   const modeIcon =
     mode === 'shuffle' ? (
       <IconShuffle size={18} />
+    ) : mode === 'single' ? (
+      <IconPlayOnce size={18} />
     ) : mode === 'loop-one' ? (
       <IconRepeatOne size={18} />
     ) : (

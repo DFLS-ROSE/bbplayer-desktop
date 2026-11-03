@@ -6,7 +6,8 @@ import type { AudioQualityPref } from './audio-quality'
 export type { AudioQualityPref }
 
 // —— 播放模式 ——
-export type PlayMode = 'sequence' | 'loop-one' | 'loop-all' | 'shuffle'
+/** 播放模式：顺序 / 单条（播完停止）/ 单曲循环 / 列表循环 / 随机 */
+export type PlayMode = 'sequence' | 'single' | 'loop-one' | 'loop-all' | 'shuffle'
 
 // —— 播放项来源 ——
 export type TrackSource = 'local' | 'favorite' | 'subscription' | 'imported' | 'search'

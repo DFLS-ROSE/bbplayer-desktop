@@ -15,9 +15,10 @@ function buildMenu(): Menu {
     { label: '上一首', click: () => sendPlayerCommand({ type: 'prev' }) },
     { label: '下一首', click: () => sendPlayerCommand({ type: 'next' }) },
     {
-      label: '循环模式',
+      label: '播放模式',
       submenu: [
         { label: '顺序播放', click: () => sendPlayerCommand({ type: 'setMode', mode: 'sequence' }) },
+        { label: '单条播放（播完停止）', click: () => sendPlayerCommand({ type: 'setMode', mode: 'single' }) },
         { label: '单曲循环', click: () => sendPlayerCommand({ type: 'setMode', mode: 'loop-one' }) },
         { label: '列表循环', click: () => sendPlayerCommand({ type: 'setMode', mode: 'loop-all' }) },
         { label: '随机播放', click: () => sendPlayerCommand({ type: 'setMode', mode: 'shuffle' }) },

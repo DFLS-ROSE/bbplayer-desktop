@@ -14,7 +14,9 @@ import type { ReleaseInfo, StableUpdateResult, UpdateStatus } from '../shared/ty
 import { createTraceId, logError, logInfo, logWarn } from './logger'
 import { sendToMain } from './window-manager'
 
-const GITHUB_OWNER = 'LuoPoTou666'
+// 发布仓库必须指向「实际发 Release 的那个」：以前写的是 LuoPoTou666（旧仓库，最新只到
+// v0.2.8），而 v0.3 之后所有版本都发在 DFLS-ROSE，导致「检查更新」永远查不到新版本。
+const GITHUB_OWNER = 'DFLS-ROSE'
 const GITHUB_REPO = 'bbplayer-desktop'
 const GITHUB_API = 'https://api.github.com'
 const UA = 'BBPlayer-Desktop'

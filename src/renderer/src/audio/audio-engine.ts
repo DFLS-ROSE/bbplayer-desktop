@@ -4,7 +4,8 @@ import { usePlayerStore } from '@renderer/store/player-store'
 import { useSettingsStore } from '@renderer/store/settings-store'
 import { toast } from '@renderer/components/ui'
 import { buildSourceList, hostOf } from '@shared/media-sources'
-import type { SessionContext, Track } from '@shared/types'
+import type { SessionContext, Track, VideoInfo } from '@shared/types'
+import { buildPartTrackFrom } from '@shared/video-parts'
 
 type AudioCtor = typeof AudioContext
 
@@ -190,6 +191,7 @@ class AudioEngine {
 
     // 搜索结果的 cid 为 0，播放前补齐视频信息
     let resolved = track
+    let videoInfo: VideoInfo | null = null
     if (!resolved.cid) {
       try {
         const r = await window.api.bili.getVideo(resolved.bvid)
@@ -198,6 +200,7 @@ class AudioEngine {
         // 表现就是「换了歌，但信息/音频还是上一首」。
         if (token !== this.restoreToken) return
         if (r.ok) {
+          videoInfo = r.data
           const pages = r.data.pages ?? []
           const first = pages[0]
           const isMulti = pages.length > 1
@@ -227,6 +230,17 @@ class AudioEngine {
         })
       }
     }
+
+    // 分P：并行取一次视频信息（已为补 cid 取过就直接复用，不重复打接口）。
+    // 不阻塞起播 —— 播起来之后再决定要不要把队列换成整段分P。
+    const partsInfoPromise: Promise<VideoInfo | null> = videoInfo
+      ? Promise.resolve(videoInfo)
+      : resolved.localFileId
+        ? Promise.resolve(null)
+        : window.api.bili
+            .getVideo(resolved.bvid)
+            .then((r) => (r.ok ? r.data : null))
+            .catch(() => null)
 
     // 取播放地址：本地已下载的优先用本地文件，其次在线流（主地址 + 备用 CDN 节点）
     let sources: string[] = []
@@ -292,8 +306,32 @@ class AudioEngine {
       }
     }
     if (token !== this.restoreToken) return
+
+    // 多 P 视频：把整段分P 换进播放队列（此时已经起播，不影响出声时机）。
+    // 从歌单播放时保持歌单队列 —— 在歌单里播一首多P 视频不该把整个歌单顶掉。
+    const info = await partsInfoPromise
+    if (token !== this.restoreToken) return
+    if (info && !resolved.playlistId) this.applyPartsQueue(info, resolved)
+
     void this.recordHistory(resolved)
     void this.saveSession()
+  }
+
+  /**
+   * 分P 视频：以全部分P 作为播放队列，并把当前曲目对齐到正在播的那一分P。
+   * 只在「单个视频」场景调用 —— 判断依据是当前曲目有没有 playlistId：
+   * 歌单里的条目都带它，那种场景要保留歌单队列，不能把整个歌单顶掉。
+   * 单 P 视频（pages ≤ 1）也直接返回。
+   */
+  private applyPartsQueue(info: VideoInfo, current: Track): void {
+    const pages = info.pages ?? []
+    if (pages.length <= 1) return
+    const tracks = pages.map((page, i) => buildPartTrackFrom(current, page, i, pages.length))
+    let index = tracks.findIndex((t) => t.cid === current.cid)
+    if (index < 0) index = 0
+    const store = usePlayerStore.getState()
+    store.setQueue(tracks, index)
+    store.setCurrentTrack(tracks[index])
   }
 
   /**

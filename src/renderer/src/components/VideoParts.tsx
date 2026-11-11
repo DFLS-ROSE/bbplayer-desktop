@@ -29,6 +29,13 @@ export function VideoParts({ track }: { track: Track | null }) {
     if (!page || page.cid === track.cid) return
     const s = usePlayerStore.getState()
     const queue = s.queue.length ? [...s.queue] : [track]
+    // 分P 视频会自动把整段分P 塞进队列：队列里已经有这一 P 就直接播它，
+    // 不要再用目标分P 覆盖当前项（那会把队列弄乱）
+    const existing = queue.findIndex((t) => t.cid === page.cid && t.bvid === track.bvid)
+    if (existing >= 0) {
+      void engine.playTrack(queue[existing], queue, existing)
+      return
+    }
     let at = queue.findIndex((t) => t.id === track.id)
     if (at < 0) at = s.queueIndex >= 0 && s.queueIndex < queue.length ? s.queueIndex : 0
     const partTrack = buildPartTrackFrom(track, page, index, pages.length)
